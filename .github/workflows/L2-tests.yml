@@ -100,7 +100,7 @@ jobs:
         with:
           repository: rdkcentral/entservices-usbmassstorage
           path: entservices-usbmassstorage
-          ref: develop
+          ref: topic/RDKEMW-13482
 
       - name: Checkout entservices-USBDevice
         uses: actions/checkout@v3
@@ -114,7 +114,7 @@ jobs:
         with:
           repository: rdkcentral/entservices-testframework
           path: entservices-testframework
-          ref: develop
+          ref: topic/RDKEMW-13481
           token: ${{ secrets.RDKCM_RDKE }}
 
       - name: Checkout googletest
