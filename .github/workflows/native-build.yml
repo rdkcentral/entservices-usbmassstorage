@@ -1,4 +1,4 @@
-name: Build USBMassstorage Component in Native Environment
+name: Build USBMassStorage Component in Native Environment
 
 on:
   push:
@@ -7,8 +7,8 @@ on:
     branches: [ main, 'sprint/**', 'release/**', topic/RDK*, develop ]
 
 jobs:
-  build-usbdevice-on-pr:
-    name: Build entservices-usbdevice component in github rdkcentral
+  build-usbmassstorage-on-pr:
+    name: Build entservices-usbmassstorage component in github rdkcentral
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/rdkcentral/docker-rdk-ci:latest
