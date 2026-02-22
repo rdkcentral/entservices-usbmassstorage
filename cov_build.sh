@@ -27,40 +27,22 @@ cmake -G Ninja -S "$GITHUB_WORKSPACE" -B build/entservices-usbmassstorage \
 -DPLUGIN_TELEMETRY=ON \
 -DCMAKE_CXX_FLAGS="-DEXCEPTIONS_ENABLE=ON \
 -I ${GITHUB_WORKSPACE}/entservices-testframework/Tests/headers \
--I ${GITHUB_WORKSPACE}/entservices-testframework/Tests/headers/audiocapturemgr \
--I ${GITHUB_WORKSPACE}/entservices-testframework/Tests/headers/rdk/ds \
--I ${GITHUB_WORKSPACE}/entservices-testframework/Tests/headers/rdk/iarmbus \
--I ${GITHUB_WORKSPACE}/entservices-testframework/Tests/headers/rdk/iarmmgrs-hal \
--I ${GITHUB_WORKSPACE}/entservices-testframework/Tests/headers/ccec/drivers \
--I ${GITHUB_WORKSPACE}/entservices-testframework/Tests/headers/network \
 -I ${GITHUB_WORKSPACE}/entservices-testframework/Tests/headers/libusb \
--I ${GITHUB_WORKSPACE}/entservices-testframework/Tests/headers/Dobby \
--I ${GITHUB_WORKSPACE}/entservices-testframework/Tests/headers/Dobby/Public/Dobby \
--I ${GITHUB_WORKSPACE}/entservices-testframework/Tests/headers/Dobby/IpcService \
 -I ${GITHUB_WORKSPACE}/entservices-testframework/Tests/mocks \
 -I ${GITHUB_WORKSPACE}/entservices-testframework/Tests/mocks/thunder \
 -I /usr/include/libdrm \
--include ${GITHUB_WORKSPACE}/entservices-testframework/Tests/mocks/devicesettings.h \
--include ${GITHUB_WORKSPACE}/entservices-testframework/Tests/mocks/Iarm.h \
--include ${GITHUB_WORKSPACE}/entservices-testframework/Tests/mocks/Rfc.h \
--include ${GITHUB_WORKSPACE}/entservices-testframework/Tests/mocks/RBus.h \
 -include ${GITHUB_WORKSPACE}/entservices-testframework/Tests/mocks/Telemetry.h \
 -include ${GITHUB_WORKSPACE}/entservices-testframework/Tests/mocks/Udev.h \
 -include ${GITHUB_WORKSPACE}/entservices-testframework/Tests/mocks/pkg.h \
 -include ${GITHUB_WORKSPACE}/entservices-testframework/Tests/mocks/maintenanceMGR.h \
 -include ${GITHUB_WORKSPACE}/entservices-testframework/Tests/mocks/secure_wrappermock.h \
 -include ${GITHUB_WORKSPACE}/entservices-testframework/Tests/mocks/libusb/libusb.h \
--include ${GITHUB_WORKSPACE}/entservices-testframework/Tests/mocks/Dobby.h \
--include ${GITHUB_WORKSPACE}/entservices-testframework/Tests/headers/Dobby/DobbyProtocol.h \
--include ${GITHUB_WORKSPACE}/entservices-testframework/Tests/headers/Dobby/DobbyProxy.h \
--include ${GITHUB_WORKSPACE}/entservices-testframework/Tests/headers/Dobby/Public/Dobby/IDobbyProxy.h \
--include ${GITHUB_WORKSPACE}/entservices-testframework/Tests/headers/Dobby/IpcService/IpcFactory.h \
 -Wall -Werror -Wno-error=format \
 -Wl,-wrap,system -Wl,-wrap,popen -Wl,-wrap,syslog \
 -DENABLE_TELEMETRY_LOGGING -DUSE_IARMBUS \
--DENABLE_SYSTEM_GET_STORE_DEMO_LINK -DENABLE_DEEP_SLEEP \
+-DENABLE_SYSTEM_GET_STORE_DEMO_LINK \
 -DENABLE_SET_WAKEUP_SRC_CONFIG -DENABLE_THERMAL_PROTECTION \
--DUSE_DRM_SCREENCAPTURE -DHAS_API_SYSTEM -DHAS_API_POWERSTATE \
+-DHAS_API_SYSTEM -DHAS_API_POWERSTATE \
 -DHAS_RBUS -DDISABLE_SECURITY_TOKEN -DENABLE_DEVICE_MANUFACTURER_INFO -DUSE_THUNDER_R4=ON -DTHUNDER_VERSION=4 -DTHUNDER_VERSION_MAJOR=4 -DTHUNDER_VERSION_MINOR=4" \
 
 
