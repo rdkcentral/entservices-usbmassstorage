@@ -115,15 +115,10 @@ echo "current working dir: "${PWD}
 touch libudev.h
 touch libusb/libusb.h
 touch rfcapi.h
-touch rbus.h
-touch pkg.h
-touch edid-parser.hpp
 touch secure_wrapper.h
-touch wpa_ctrl.h
 touch proc/readproc.h
 touch rdk_logger_milestone.h
 touch tr181api.h
-touch dsRpc.h
 echo "files created successfully"
 echo "======================================================================================"
 
