@@ -220,6 +220,8 @@ protected:
 };
 
 USBMassStorageTest:: USBMassStorageTest():L2TestMocks()
+ ,m_controller_usbmassstorage(nullptr)
+ ,m_usbmassstorageplugin(nullptr)
 {
         Core::JSONRPC::Message message;
         string response;
@@ -1656,4 +1658,3 @@ TEST_F(USBMassStorageTest, comrpc_Multiple_getDeviceListAndMount_success)
 
 }
 #endif
-
