@@ -31,15 +31,11 @@ cmake -G Ninja -S "$GITHUB_WORKSPACE" -B build/entservices-usbmassstorage \
 -I /usr/include/libdrm \
 -include ${GITHUB_WORKSPACE}/entservices-testframework/Tests/mocks/Udev.h \
 -include ${GITHUB_WORKSPACE}/entservices-testframework/Tests/mocks/pkg.h \
--include ${GITHUB_WORKSPACE}/entservices-testframework/Tests/mocks/maintenanceMGR.h \
 -include ${GITHUB_WORKSPACE}/entservices-testframework/Tests/mocks/secure_wrappermock.h \
 -include ${GITHUB_WORKSPACE}/entservices-testframework/Tests/mocks/libusb/libusb.h \
 -Wall -Werror -Wno-error=format \
 -Wl,-wrap,system -Wl,-wrap,popen -Wl,-wrap,syslog \
--DENABLE_SYSTEM_GET_STORE_DEMO_LINK \
--DENABLE_SET_WAKEUP_SRC_CONFIG -DENABLE_THERMAL_PROTECTION \
--DHAS_API_SYSTEM -DHAS_API_POWERSTATE \
--DHAS_RBUS -DDISABLE_SECURITY_TOKEN -DENABLE_DEVICE_MANUFACTURER_INFO -DUSE_THUNDER_R4=ON -DTHUNDER_VERSION=4 -DTHUNDER_VERSION_MAJOR=4 -DTHUNDER_VERSION_MINOR=4" \
+-DDISABLE_SECURITY_TOKEN -DUSE_THUNDER_R4=ON -DTHUNDER_VERSION=4 -DTHUNDER_VERSION_MAJOR=4 -DTHUNDER_VERSION_MINOR=4" \
 
 
 cmake --build build/entservices-usbmassstorage --target install
