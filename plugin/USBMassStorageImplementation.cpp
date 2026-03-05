@@ -390,7 +390,7 @@ namespace Plugin {
         Exchange::IUSBDevice::IUSBDeviceIterator* devices = nullptr;
         Exchange::IUSBDevice::USBDevice actual_usbDevice_dev_list = {0};
 
-        printf("Test coverity workflow %s")
+        printf("Test coverity workflow %s");
         if (nullptr == _remoteUSBDeviceObject)
         {
             LOGERR("USBDeviceObject is null");
