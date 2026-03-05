@@ -26,6 +26,7 @@
 #include <mutex>
 #include <thread>
 #include <fstream>
+#include <stdio.h>
 
 #include "USBMassStorageImplementation.h"
 #include "UtilsLogging.h"
@@ -389,6 +390,7 @@ namespace Plugin {
         Exchange::IUSBDevice::IUSBDeviceIterator* devices = nullptr;
         Exchange::IUSBDevice::USBDevice actual_usbDevice_dev_list = {0};
 
+        printf("Test coverity workflow %s")
         if (nullptr == _remoteUSBDeviceObject)
         {
             LOGERR("USBDeviceObject is null");

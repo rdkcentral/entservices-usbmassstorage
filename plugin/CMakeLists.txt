@@ -41,6 +41,8 @@ set_target_properties(${MODULE_NAME} PROPERTIES
         CXX_STANDARD 11
         CXX_STANDARD_REQUIRED YES)
 
+target_compile_options(${MODULE_NAME} PRIVATE -Wno-error=format)
+
 target_link_libraries(${MODULE_NAME}
     PRIVATE
         CompileSettingsDebug::CompileSettingsDebug
@@ -53,6 +55,8 @@ install(TARGETS ${MODULE_NAME}
 add_library(${PLUGIN_IMPLEMENTATION} SHARED
     USBMassStorageImplementation.cpp
     Module.cpp)
+
+target_compile_options(${PLUGIN_IMPLEMENTATION} PRIVATE -Wno-error=format)
 
 include_directories(../helpers)
 
