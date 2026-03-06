@@ -86,6 +86,7 @@ namespace Plugin {
     {
         if(_remoteUSBDeviceObject)
         {
+            _remoteUSBDeviceObject->Unregister(&_USB_DeviceNotification);
             _remoteUSBDeviceObject->Release();
             _remoteUSBDeviceObject = nullptr;
         }
