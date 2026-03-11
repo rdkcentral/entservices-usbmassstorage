@@ -37,6 +37,7 @@
 
 using namespace std;
 
+
 namespace WPEFramework {
 namespace Plugin {
 
