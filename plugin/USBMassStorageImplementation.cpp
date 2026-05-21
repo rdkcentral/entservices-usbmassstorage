@@ -66,7 +66,7 @@ namespace Plugin {
             {
                 registerEventHandlers();
 
-                /* Getting USB Device list and mounting available USB devices */
+                /* Getting USB Device list and mounti ng available USB devices */
                 MountDevicesOnBootUp();
             }
             else
