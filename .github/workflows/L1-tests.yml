@@ -126,7 +126,7 @@ jobs:
         with:
           repository: rdkcentral/entservices-testframework
           path: entservices-testframework
-          ref: feature/helpers_v1
+          ref: 1.0.12
 
       - name: Checkout entservices-usbmassstorage
         if: ${{ inputs.caller_source == 'local' }}
@@ -140,7 +140,7 @@ jobs:
         with:
           repository: rdkcentral/entservices-usbmassstorage
           path: entservices-usbmassstorage
-          ref: feature/RDKEMW-16743
+          ref: develop
 
       - name: Checkout googletest
         uses: actions/checkout@v3
