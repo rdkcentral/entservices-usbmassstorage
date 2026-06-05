@@ -346,42 +346,54 @@ void USBMassStorageTest::Mock_SetDeviceDesc(uint8_t bus_number, uint8_t device_a
     {
         std::string vendorFileName = "/tmp/block/sda/device/vendor";
         std::ofstream outVendorStream(vendorFileName);
-
-        if (!outVendorStream) {
-            TEST_LOG("Error opening file for writing!");
-        }
+        ASSERT_TRUE(outVendorStream.is_open()) << "Failed to open file for writing: " << vendorFileName;
         outVendorStream << "Generic" << std::endl;
         outVendorStream.close();
 
         std::string modelFileName = "/tmp/block/sda/device/model";
         std::ofstream outModelStream(modelFileName);
-
-        if (!outModelStream) {
-            TEST_LOG("Error opening file for writing!");
-        }
+        ASSERT_TRUE(outModelStream.is_open()) << "Failed to open file for writing: " << modelFileName;
         outModelStream << "Flash Disk" << std::endl;
         outModelStream.close();
+
+        std::string busnumFileName = "/tmp/block/sda/device/busnum";
+        std::ofstream busnumOutStream(busnumFileName);
+        ASSERT_TRUE(busnumOutStream.is_open()) << "Failed to open file for writing: " << busnumFileName;
+        busnumOutStream << (int)bus_number << std::endl;
+        busnumOutStream.close();
+
+        std::string devnumFileName = "/tmp/block/sda/device/devnum";
+        std::ofstream devnumOutStream(devnumFileName);
+        ASSERT_TRUE(devnumOutStream.is_open()) << "Failed to open file for writing: " << devnumFileName;
+        devnumOutStream << (int)device_address << std::endl;
+        devnumOutStream.close();
     }
 
     if (device_address == MOCK_USB_DEVICE_ADDRESS_2)
     {
         std::string vendorFileName = "/tmp/block/sdb/device/vendor";
-        std::ofstream  outVendorStream(vendorFileName);
-
-        if (!outVendorStream) {
-            TEST_LOG("Error opening file for writing!");
-        }
+        std::ofstream outVendorStream(vendorFileName);
+        ASSERT_TRUE(outVendorStream.is_open()) << "Failed to open file for writing: " << vendorFileName;
         outVendorStream << "JetFlash" << std::endl;
         outVendorStream.close();
 
         std::string modelFileName = "/tmp/block/sdb/device/model";
         std::ofstream outModelStream(modelFileName);
-
-        if (!outModelStream) {
-            TEST_LOG("Error opening file for writing!");
-        }
+        ASSERT_TRUE(outModelStream.is_open()) << "Failed to open file for writing: " << modelFileName;
         outModelStream << "Transcend_16GB" << std::endl;
         outModelStream.close();
+
+        std::string busnumFileName = "/tmp/block/sdb/device/busnum";
+        std::ofstream busnumOutStream(busnumFileName);
+        ASSERT_TRUE(busnumOutStream.is_open()) << "Failed to open file for writing: " << busnumFileName;
+        busnumOutStream << (int)bus_number << std::endl;
+        busnumOutStream.close();
+
+        std::string devnumFileName = "/tmp/block/sdb/device/devnum";
+        std::ofstream devnumOutStream(devnumFileName);
+        ASSERT_TRUE(devnumOutStream.is_open()) << "Failed to open file for writing: " << devnumFileName;
+        devnumOutStream << (int)device_address << std::endl;
+        devnumOutStream.close();
     }
 }
 
@@ -389,40 +401,15 @@ void USBMassStorageTest::Mock_SetSerialNumberInUSBDevicePath()
 {
     std::string serialNumFileName1 = "/tmp/bus/usb/devices/100-123/serial";
     std::ofstream serialNumOutFile1(serialNumFileName1);
-
-    if (!serialNumOutFile1) {
-        TEST_LOG("Error opening file for writing!");
-    }
+    ASSERT_TRUE(serialNumOutFile1.is_open()) << "Failed to open file for writing: " << serialNumFileName1;
     serialNumOutFile1 << "B32FD507" << std::endl;
     serialNumOutFile1.close();
 
     std::string serialNumFileName2 = "/tmp/bus/usb/devices/101-124/serial";
     std::ofstream serialNumOutFile2(serialNumFileName2);
-
-    if (!serialNumOutFile2) {
-        TEST_LOG("Error opening file for writing!");
-    }
-    serialNumOutFile2<< "UEUIRCXT" << std::endl;
+    ASSERT_TRUE(serialNumOutFile2.is_open()) << "Failed to open file for writing: " << serialNumFileName2;
+    serialNumOutFile2 << "UEUIRCXT" << std::endl;
     serialNumOutFile2.close();
-
-    std::string serialNumFileSda = "/dev/sda";
-    std::ofstream serialNumOutFileSda(serialNumFileSda);
-
-    if (!serialNumOutFileSda) {
-        TEST_LOG("Error opening file for writing!");
-    }
-    serialNumOutFileSda << "B32FD507 100-123" << std::endl;
-    serialNumOutFileSda.close();
-
-
-    std::string serialNumFileSdb = "/dev/sdb";
-    std::ofstream serialNumOutFileSdb(serialNumFileSdb);
-
-    if (!serialNumOutFileSdb) {
-        TEST_LOG("Error opening file for writing!");
-    }
-    serialNumOutFileSdb << "UEUIRCXT 101-124" << std::endl;
-    serialNumOutFileSdb.close();
 }
 
 uint32_t USBMassStorageTest::CreateUSBMassStorageInterfaceObjectUsingComRPCConnection()
