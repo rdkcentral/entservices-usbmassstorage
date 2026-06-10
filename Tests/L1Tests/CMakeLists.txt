@@ -32,7 +32,7 @@ set (TEST_LIB
     ${NAMESPACE}Plugins::${NAMESPACE}Plugins
 )
 
-set (TEST_INC ../../helpers)
+set (TEST_INC)
 
 #########################################################################################
 # add_plugin_test_ex: Macro to add plugin tests, it will append to TEST_SRC, TEST_INC,
@@ -102,7 +102,7 @@ macro(add_plugin_test plugin_name test_files)
 endmacro()
 
 # PLUGIN_USB_MASS_STORAGE
-set (USB_MASS_STORAGE_INC ${CMAKE_SOURCE_DIR}/plugin ${CMAKE_SOURCE_DIR}/helpers)
+set (USB_MASS_STORAGE_INC ${CMAKE_SOURCE_DIR}/plugin ${CMAKE_SOURCE_DIR}/../entservices-helpers/helpers)
 set (USB_MASS_STORAGE_LIBS ${NAMESPACE}USBMassStorage ${NAMESPACE}USBMassStorageImplementation)
 add_plugin_test_ex(PLUGIN_USB_MASS_STORAGE tests/test_USBMassStorage.cpp "${USB_MASS_STORAGE_INC}" "${USB_MASS_STORAGE_LIBS}")
 
