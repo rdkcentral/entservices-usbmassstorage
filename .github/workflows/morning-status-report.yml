@@ -1,23 +1,92 @@
-name: Workflow Schedule Test
+name: Morning L1/L2 Status Report
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:   # manual trigger for testing anytime
   push:
     branches:
-      - feature/AI_POC_workflow_monitoring  # triggers on every push to this branch
+      - feature/AI_POC_workflow_monitoring  # remove this line after merging to main
+  pull_request:
+    types: [closed]    # fires when any PR is closed; step below filters merged-only
+    branches:
+      - develop        # only PRs targeting develop branch (default branch)
   schedule:
-    - cron: '*/5 * * * *'
+    - cron: '*/10 * * * *'   # every 10 min for testing → change to '0 8 * * *' for daily 8AM
 
 jobs:
-  test:
+  l1-l2-status:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Print workflow info
+      # ── Step 0: Skip if PR was closed WITHOUT merging ──────────
+      - name: Check if PR was actually merged
+        if: github.event_name == 'pull_request'
         run: |
-          echo "Workflow triggered successfully"
-          echo "Repository = ${{ github.repository }}"
-          echo "Branch = ${{ github.ref_name }}"
-          echo "Event = ${{ github.event_name }}"
-          echo "Run ID = ${{ github.run_id }}"
-          date -u
+          if [[ "${{ github.event.pull_request.merged }}" != "true" ]]; then
+            echo "PR was closed but NOT merged — skipping report."
+            exit 0
+          fi
+          echo "PR #${{ github.event.pull_request.number }} merged → running status check."
+
+      # ── Step 1: Fetch latest L1-tests run on develop ─────────────
+      - name: Get latest L1-tests status
+        id: l1
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          DATA=$(gh api \
+            "repos/${{ github.repository }}/actions/workflows/L1-tests.yml/runs?per_page=1&branch=develop" \
+            --jq '.workflow_runs[0] | "\(.conclusion) | \(.created_at) | \(.html_url)"')
+
+          CONCLUSION=$(echo "$DATA" | cut -d'|' -f1 | xargs)
+          CREATED=$(echo "$DATA"   | cut -d'|' -f2 | xargs)
+          URL=$(echo "$DATA"       | cut -d'|' -f3 | xargs)
+
+          echo "conclusion=$CONCLUSION" >> $GITHUB_OUTPUT
+          echo "created=$CREATED"       >> $GITHUB_OUTPUT
+          echo "url=$URL"               >> $GITHUB_OUTPUT
+          echo "L1 → conclusion=$CONCLUSION  created=$CREATED"
+
+      # ── Step 2: Fetch latest L2-tests run on develop ─────────────
+      - name: Get latest L2-tests status
+        id: l2
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          DATA=$(gh api \
+            "repos/${{ github.repository }}/actions/workflows/L2-tests.yml/runs?per_page=1&branch=develop" \
+            --jq '.workflow_runs[0] | "\(.conclusion) | \(.created_at) | \(.html_url)"')
+
+          CONCLUSION=$(echo "$DATA" | cut -d'|' -f1 | xargs)
+          CREATED=$(echo "$DATA"   | cut -d'|' -f2 | xargs)
+          URL=$(echo "$DATA"       | cut -d'|' -f3 | xargs)
+
+          echo "conclusion=$CONCLUSION" >> $GITHUB_OUTPUT
+          echo "created=$CREATED"       >> $GITHUB_OUTPUT
+          echo "url=$URL"               >> $GITHUB_OUTPUT
+          echo "L2 → conclusion=$CONCLUSION  created=$CREATED"
+
+      # ── Step 3: Print combined summary in the log ──────────────
+      - name: Print status summary
+        run: |
+          echo "========================================"
+          echo "  DAILY L1/L2 TEST STATUS REPORT"
+          echo "  $(date -u +'%Y-%m-%d %H:%M UTC')"
+          echo "========================================"
+          echo ""
+          echo "L1-tests  →  ${{ steps.l1.outputs.conclusion }}"
+          echo "  Last run : ${{ steps.l1.outputs.created }}"
+          echo "  URL      : ${{ steps.l1.outputs.url }}"
+          echo ""
+          echo "L2-tests  →  ${{ steps.l2.outputs.conclusion }}"
+          echo "  Last run : ${{ steps.l2.outputs.created }}"
+          echo "  URL      : ${{ steps.l2.outputs.url }}"
+          echo ""
+
+          # Fail this workflow if either test suite failed — useful for PR checks
+          if [[ "${{ steps.l1.outputs.conclusion }}" == "failure" || \
+                "${{ steps.l2.outputs.conclusion }}" == "failure" ]]; then
+            echo "❌ One or more test suites FAILED"
+            exit 1
+          else
+            echo "✅ All test suites passed"
+          fi
