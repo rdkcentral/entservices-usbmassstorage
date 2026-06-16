@@ -51,6 +51,11 @@ jobs:
           echo "run_date=$RUN_DATE" >> $GITHUB_OUTPUT
           echo "Latest tests-trigger run ID: $RUN_ID"
 
+          # Verify: print what triggered that run
+          gh api \
+            "repos/${{ github.repository }}/actions/workflows/tests-trigger.yml/runs?per_page=1" \
+            --jq '.workflow_runs[0] | "Triggered by event=\(.event) | branch=\(.head_branch) | PR=\(.pull_requests[0].number // "none") | commit=\(.head_commit.message)"'
+
       # ── Step 2: Read L1 and L2 job results from that run ───────
       - name: Get L1 and L2 job results
         id: jobs
