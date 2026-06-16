@@ -19,19 +19,6 @@ jobs:
       actions: read    # required to read other workflow run results via API
 
     steps:
-      # ── Debug: verify API access and check raw response ────────
-      - name: Debug API access
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo "Checking available workflow runs..."
-          gh api "repos/${{ github.repository }}/actions/workflows" \
-            --jq '.workflows[] | "\(.name) → \(.path)"'
-          echo "---"
-          echo "Checking L1 runs count..."
-          gh api "repos/${{ github.repository }}/actions/workflows/L1-tests.yml/runs?per_page=3" \
-            --jq '.total_count'
-
       # ── Step 0: Skip if PR was closed WITHOUT merging ──────────
       - name: Check if PR was actually merged
         if: github.event_name == 'pull_request'
@@ -42,45 +29,59 @@ jobs:
           fi
           echo "PR #${{ github.event.pull_request.number }} merged → running status check."
 
-      # ── Step 1: Fetch latest L1-tests run on develop ─────────────
-      - name: Get latest L1-tests status
-        id: l1
+      # ── Step 1: Get latest main-workflow (tests-trigger) run ───
+      # L1/L2 are workflow_call children — they don't have their own runs.
+      # We fetch the latest run of tests-trigger.yml, then read its jobs.
+      - name: Get latest tests-trigger run ID
+        id: trigger_run
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          DATA=$(gh api \
-            "repos/${{ github.repository }}/actions/workflows/L1-tests.yml/runs?per_page=1" \
-            --jq '.workflow_runs[0] | "\(.conclusion) | \(.created_at) | \(.html_url)"')
+          RUN_ID=$(gh api \
+            "repos/${{ github.repository }}/actions/workflows/tests-trigger.yml/runs?per_page=1" \
+            --jq '.workflow_runs[0].id')
+          RUN_URL=$(gh api \
+            "repos/${{ github.repository }}/actions/workflows/tests-trigger.yml/runs?per_page=1" \
+            --jq '.workflow_runs[0].html_url')
+          RUN_DATE=$(gh api \
+            "repos/${{ github.repository }}/actions/workflows/tests-trigger.yml/runs?per_page=1" \
+            --jq '.workflow_runs[0].created_at')
+          echo "run_id=$RUN_ID"   >> $GITHUB_OUTPUT
+          echo "run_url=$RUN_URL" >> $GITHUB_OUTPUT
+          echo "run_date=$RUN_DATE" >> $GITHUB_OUTPUT
+          echo "Latest tests-trigger run ID: $RUN_ID"
 
-          CONCLUSION=$(echo "$DATA" | cut -d'|' -f1 | xargs)
-          CREATED=$(echo "$DATA"   | cut -d'|' -f2 | xargs)
-          URL=$(echo "$DATA"       | cut -d'|' -f3 | xargs)
-
-          echo "conclusion=$CONCLUSION" >> $GITHUB_OUTPUT
-          echo "created=$CREATED"       >> $GITHUB_OUTPUT
-          echo "url=$URL"               >> $GITHUB_OUTPUT
-          echo "L1 → conclusion=$CONCLUSION  created=$CREATED"
-
-      # ── Step 2: Fetch latest L2-tests run on develop ─────────────
-      - name: Get latest L2-tests status
-        id: l2
+      # ── Step 2: Read L1 and L2 job results from that run ───────
+      - name: Get L1 and L2 job results
+        id: jobs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          DATA=$(gh api \
-            "repos/${{ github.repository }}/actions/workflows/L2-tests.yml/runs?per_page=1" \
-            --jq '.workflow_runs[0] | "\(.conclusion) | \(.created_at) | \(.html_url)"')
+          RUN_ID="${{ steps.trigger_run.outputs.run_id }}"
 
-          CONCLUSION=$(echo "$DATA" | cut -d'|' -f1 | xargs)
-          CREATED=$(echo "$DATA"   | cut -d'|' -f2 | xargs)
-          URL=$(echo "$DATA"       | cut -d'|' -f3 | xargs)
+          L1=$(gh api "repos/${{ github.repository }}/actions/runs/$RUN_ID/jobs" \
+            --jq '.jobs[] | select(.name | test("L1|unit test"; "i")) | .conclusion' | head -1)
 
-          echo "conclusion=$CONCLUSION" >> $GITHUB_OUTPUT
-          echo "created=$CREATED"       >> $GITHUB_OUTPUT
-          echo "url=$URL"               >> $GITHUB_OUTPUT
-          echo "L2 → conclusion=$CONCLUSION  created=$CREATED"
+          L2=$(gh api "repos/${{ github.repository }}/actions/runs/$RUN_ID/jobs" \
+            --jq '.jobs[] | select(.name | test("L2"; "i")) | .conclusion' | head -1)
 
-      # ── Step 3: Print combined summary in the log ──────────────
+          # fallback: if job filter found nothing, show overall run conclusion
+          if [[ -z "$L1" ]]; then
+            L1=$(gh api \
+              "repos/${{ github.repository }}/actions/workflows/tests-trigger.yml/runs?per_page=1" \
+              --jq '.workflow_runs[0].conclusion')
+            echo "L1 job not found by name — using overall run conclusion"
+          fi
+          if [[ -z "$L2" ]]; then
+            L2=$L1
+          fi
+
+          echo "l1_conclusion=$L1" >> $GITHUB_OUTPUT
+          echo "l2_conclusion=$L2" >> $GITHUB_OUTPUT
+          echo "L1 → $L1"
+          echo "L2 → $L2"
+
+      # ── Step 3: Print combined summary ─────────────────────────
       - name: Print status summary
         run: |
           echo "========================================"
@@ -88,16 +89,19 @@ jobs:
           echo "  $(date -u +'%Y-%m-%d %H:%M UTC')"
           echo "========================================"
           echo ""
-          echo "L1-tests  →  ${{ steps.l1.outputs.conclusion }}"
-          echo "  Last run : ${{ steps.l1.outputs.created }}"
-          echo "  URL      : ${{ steps.l1.outputs.url }}"
-          echo ""
-          echo "L2-tests  →  ${{ steps.l2.outputs.conclusion }}"
-          echo "  Last run : ${{ steps.l2.outputs.created }}"
-          echo "  URL      : ${{ steps.l2.outputs.url }}"
+          echo "L1-tests  →  ${{ steps.jobs.outputs.l1_conclusion }}"
+          echo "L2-tests  →  ${{ steps.jobs.outputs.l2_conclusion }}"
+          echo "Run date  :  ${{ steps.trigger_run.outputs.run_date }}"
+          echo "Run URL   :  ${{ steps.trigger_run.outputs.run_url }}"
           echo ""
 
-          # Fail this workflow if either test suite failed — useful for PR checks
+          if [[ "${{ steps.jobs.outputs.l1_conclusion }}" == "failure" || \
+                "${{ steps.jobs.outputs.l2_conclusion }}" == "failure" ]]; then
+            echo "❌ One or more test suites FAILED"
+            exit 1
+          else
+            echo "✅ All test suites passed"
+          fi
           if [[ "${{ steps.l1.outputs.conclusion }}" == "failure" || \
                 "${{ steps.l2.outputs.conclusion }}" == "failure" ]]; then
             echo "❌ One or more test suites FAILED"
