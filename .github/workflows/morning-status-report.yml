@@ -1,0 +1,20 @@
+name: Workflow Schedule Test
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/5 * * * *'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Print workflow info
+        run: |
+          echo "Workflow triggered successfully"
+          echo "Repository = ${{ github.repository }}"
+          echo "Branch = ${{ github.ref_name }}"
+          echo "Event = ${{ github.event_name }}"
+          echo "Run ID = ${{ github.run_id }}"
+          date -u
