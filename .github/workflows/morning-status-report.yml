@@ -37,24 +37,18 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          RUN_ID=$(gh api \
-            "repos/${{ github.repository }}/actions/workflows/tests-trigger.yml/runs?per_page=1" \
-            --jq '.workflow_runs[0].id')
-          RUN_URL=$(gh api \
-            "repos/${{ github.repository }}/actions/workflows/tests-trigger.yml/runs?per_page=1" \
-            --jq '.workflow_runs[0].html_url')
-          RUN_DATE=$(gh api \
-            "repos/${{ github.repository }}/actions/workflows/tests-trigger.yml/runs?per_page=1" \
-            --jq '.workflow_runs[0].created_at')
-          echo "run_id=$RUN_ID"   >> $GITHUB_OUTPUT
-          echo "run_url=$RUN_URL" >> $GITHUB_OUTPUT
+          # branch=develop&event=push → only picks runs triggered by merged PRs
+          API="repos/${{ github.repository }}/actions/workflows/tests-trigger.yml/runs?per_page=1&branch=develop&event=push"
+          RUN_ID=$(gh api "$API"   --jq '.workflow_runs[0].id')
+          RUN_URL=$(gh api "$API"  --jq '.workflow_runs[0].html_url')
+          RUN_DATE=$(gh api "$API" --jq '.workflow_runs[0].created_at')
+          COMMIT=$(gh api "$API"   --jq '.workflow_runs[0].head_commit.message')
+          echo "run_id=$RUN_ID"     >> $GITHUB_OUTPUT
+          echo "run_url=$RUN_URL"   >> $GITHUB_OUTPUT
           echo "run_date=$RUN_DATE" >> $GITHUB_OUTPUT
-          echo "Latest tests-trigger run ID: $RUN_ID"
-
-          # Verify: print what triggered that run
-          gh api \
-            "repos/${{ github.repository }}/actions/workflows/tests-trigger.yml/runs?per_page=1" \
-            --jq '.workflow_runs[0] | "Triggered by event=\(.event) | branch=\(.head_branch) | PR=\(.pull_requests[0].number // "none") | commit=\(.head_commit.message)"'
+          echo "Source run ID : $RUN_ID"
+          echo "Source commit : $COMMIT"
+          echo "Source date   : $RUN_DATE"
 
       # ── Step 2: Read L1 and L2 job results from that run ───────
       - name: Get L1 and L2 job results
@@ -71,11 +65,9 @@ jobs:
             --jq '.jobs[] | select(.name | test("L2"; "i")) | .conclusion' | head -1)
 
           # fallback: if job filter found nothing, show overall run conclusion
-          if [[ -z "$L1" ]]; then
-            L1=$(gh api \
-              "repos/${{ github.repository }}/actions/workflows/tests-trigger.yml/runs?per_page=1" \
-              --jq '.workflow_runs[0].conclusion')
-            echo "L1 job not found by name — using overall run conclusion"
+          if [[ -z "$L1" || "$L1" == "null" ]]; then
+            L1=$(gh api "repos/${{ github.repository }}/actions/runs/$RUN_ID" --jq '.conclusion')
+            echo "L1 job not matched by name — using overall run conclusion"
           fi
           if [[ -z "$L2" ]]; then
             L2=$L1
@@ -102,13 +94,6 @@ jobs:
 
           if [[ "${{ steps.jobs.outputs.l1_conclusion }}" == "failure" || \
                 "${{ steps.jobs.outputs.l2_conclusion }}" == "failure" ]]; then
-            echo "❌ One or more test suites FAILED"
-            exit 1
-          else
-            echo "✅ All test suites passed"
-          fi
-          if [[ "${{ steps.l1.outputs.conclusion }}" == "failure" || \
-                "${{ steps.l2.outputs.conclusion }}" == "failure" ]]; then
             echo "❌ One or more test suites FAILED"
             exit 1
           else
