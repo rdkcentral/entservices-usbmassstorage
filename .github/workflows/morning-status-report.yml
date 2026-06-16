@@ -2,6 +2,9 @@ name: Workflow Schedule Test
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - feature/AI_POC_workflow_monitoring  # triggers on every push to this branch
   schedule:
     - cron: '*/5 * * * *'
 
