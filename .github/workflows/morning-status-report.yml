@@ -26,6 +26,10 @@ jobs:
       REPOS: |
         rdkcentral/entservices-usbmassstorage
         rdkcentral/entservices-usbdevice
+        rdkcentral/entservices-telemetry
+        rdkcentral/entservices-systemservices
+        rdkcentral/entservices-testframework
+
 
     steps:
       # ── Step 0: Skip if PR was closed WITHOUT merging ──────────
