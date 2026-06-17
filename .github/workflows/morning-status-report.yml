@@ -16,7 +16,8 @@ jobs:
   l1-l2-status:
     runs-on: ubuntu-latest
     permissions:
-      actions: read    # required to read other workflow run results via API
+      actions: read    # read other workflow run results
+      issues: write    # create issues on failure (no extra secrets needed)
 
     steps:
       # ── Step 0: Skip if PR was closed WITHOUT merging ──────────
@@ -37,8 +38,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # branch=develop&event=push → only picks runs triggered by merged PRs
-          API="repos/${{ github.repository }}/actions/workflows/tests-trigger.yml/runs?per_page=1&branch=develop&event=push"
+          # branch=develop → picks latest run regardless of trigger type (push/PR/dispatch)
+          API="repos/${{ github.repository }}/actions/workflows/tests-trigger.yml/runs?per_page=1&branch=develop"
           RUN_ID=$(gh api "$API"   --jq '.workflow_runs[0].id')
           RUN_URL=$(gh api "$API"  --jq '.workflow_runs[0].html_url')
           RUN_DATE=$(gh api "$API" --jq '.workflow_runs[0].created_at')
@@ -50,7 +51,14 @@ jobs:
           echo "Source commit : $COMMIT"
           echo "Source date   : $RUN_DATE"
 
-      # ── Step 2: Read L1 and L2 job results from that run ───────
+      # ── Debug: confirm what run we are reading ──────────────
+      - name: Debug run details
+        run: |
+          echo "RUN_ID   = ${{ steps.trigger_run.outputs.run_id }}"
+          echo "RUN_DATE = ${{ steps.trigger_run.outputs.run_date }}"
+          echo "RUN_URL  = ${{ steps.trigger_run.outputs.run_url }}"
+
+      # ── Step 2: Read ALL job/step details from that run ────────
       - name: Get L1 and L2 job results
         id: jobs
         env:
@@ -58,25 +66,50 @@ jobs:
         run: |
           RUN_ID="${{ steps.trigger_run.outputs.run_id }}"
 
-          L1=$(gh api "repos/${{ github.repository }}/actions/runs/$RUN_ID/jobs" \
-            --jq '.jobs[] | select(.name | test("L1|unit test"; "i")) | .conclusion' | head -1)
+          # Get full job list with each step's status inside
+          ALL_JOBS=$(gh api "repos/${{ github.repository }}/actions/runs/$RUN_ID/jobs?per_page=100")
 
-          L2=$(gh api "repos/${{ github.repository }}/actions/runs/$RUN_ID/jobs" \
-            --jq '.jobs[] | select(.name | test("L2"; "i")) | .conclusion' | head -1)
+          L1=$(echo "$ALL_JOBS" | jq -r '.jobs[] | select(.name | test("L1|unit test"; "i")) | .conclusion' | head -1)
+          L2=$(echo "$ALL_JOBS" | jq -r '.jobs[] | select(.name | test("L2"; "i")) | .conclusion' | head -1)
 
-          # fallback: if job filter found nothing, show overall run conclusion
+          # fallback: if job filter found nothing, use overall run conclusion
           if [[ -z "$L1" || "$L1" == "null" ]]; then
             L1=$(gh api "repos/${{ github.repository }}/actions/runs/$RUN_ID" --jq '.conclusion')
             echo "L1 job not matched by name — using overall run conclusion"
           fi
-          if [[ -z "$L2" ]]; then
-            L2=$L1
-          fi
+          [[ -z "$L2" ]] && L2=$L1
 
           echo "l1_conclusion=$L1" >> $GITHUB_OUTPUT
           echo "l2_conclusion=$L2" >> $GITHUB_OUTPUT
           echo "L1 → $L1"
           echo "L2 → $L2"
+
+          # ── Collect failed stages for each job ─────────────────
+          # For every failed job, list which STEPS inside it failed
+          FAILED_DETAIL=$(echo "$ALL_JOBS" | jq -r '
+            .jobs[] |
+            select(.conclusion == "failure") |
+            "JOB: \(.name)\n" +
+            (
+              .steps[] |
+              select(.conclusion == "failure") |
+              "  STEP \(.number): \(.name) → \(.conclusion)"
+            )
+          ')
+
+          if [[ -z "$FAILED_DETAIL" ]]; then
+            FAILED_DETAIL="No individual step failures found."
+          fi
+
+          # Save for email (multiline needs special encoding)
+          {
+            echo "failed_detail<<DELIM"
+            echo "$FAILED_DETAIL"
+            echo "DELIM"
+          } >> $GITHUB_OUTPUT
+
+          echo "--- Failed stages ---"
+          echo "$FAILED_DETAIL"
 
       # ── Step 3: Print combined summary ─────────────────────────
       - name: Print status summary
@@ -91,11 +124,67 @@ jobs:
           echo "Run date  :  ${{ steps.trigger_run.outputs.run_date }}"
           echo "Run URL   :  ${{ steps.trigger_run.outputs.run_url }}"
           echo ""
+          echo "--- Failed stage details ---"
+          echo "${{ steps.jobs.outputs.failed_detail }}"
+          echo ""
 
           if [[ "${{ steps.jobs.outputs.l1_conclusion }}" == "failure" || \
                 "${{ steps.jobs.outputs.l2_conclusion }}" == "failure" ]]; then
             echo "❌ One or more test suites FAILED"
-            exit 1
           else
             echo "✅ All test suites passed"
           fi
+
+      # ── Step 4: Save report as artifact (email to be added after secrets are set up) ──
+      - name: Save report
+        run: |
+      # ── Step 4: GitHub Step Summary (no secrets needed) ────────
+      # Writes a formatted report into the Actions run page itself.
+      # Visible at: Actions tab → this run → "Summary" tab at the top.
+      - name: Write job summary
+        run: |
+          STATUS="${{ (steps.jobs.outputs.l1_conclusion == 'failure' || steps.jobs.outputs.l2_conclusion == 'failure') && '❌ FAILED' || '✅ PASSED' }}"
+
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          ## Daily L1/L2 Test Status Report
+          **Date:** ${{ steps.trigger_run.outputs.run_date }}
+          **Overall:** $STATUS
+
+          | Workflow | Result |
+          |----------|--------|
+          | L1-tests | ${{ steps.jobs.outputs.l1_conclusion }} |
+          | L2-tests | ${{ steps.jobs.outputs.l2_conclusion }} |
+
+          ### Failed Stage Details
+          \`\`\`
+          ${{ steps.jobs.outputs.failed_detail }}
+          \`\`\`
+
+          [View Full Run →](${{ steps.trigger_run.outputs.run_url }})
+          EOF
+
+      # ── Step 5: Create GitHub Issue on failure (no secrets needed) ──
+      # Uses built-in GITHUB_TOKEN — no setup required.
+      # Creates an issue in this repo when L1 or L2 fails.
+      # Anyone watching the repo gets a GitHub notification automatically.
+      - name: Create issue on failure
+        if: steps.jobs.outputs.l1_conclusion == 'failure' || steps.jobs.outputs.l2_conclusion == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue create \
+            --title "❌ L1/L2 Test Failure – ${{ steps.trigger_run.outputs.run_date }}" \
+            --body "## Test Failure Report
+
+          | Workflow | Result |
+          |----------|--------|
+          | L1-tests | ${{ steps.jobs.outputs.l1_conclusion }} |
+          | L2-tests | ${{ steps.jobs.outputs.l2_conclusion }} |
+
+          ### Failed Stages
+          \`\`\`
+          ${{ steps.jobs.outputs.failed_detail }}
+          \`\`\`
+
+          **Run URL:** ${{ steps.trigger_run.outputs.run_url }}" \
+            --label "bug"
