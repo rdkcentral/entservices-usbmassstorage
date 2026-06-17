@@ -62,6 +62,15 @@ jobs:
             echo "Processing: $REPO"
 
             API="repos/$REPO/actions/workflows/tests-trigger.yml/runs?per_page=1&branch=develop"
+
+            # Use --silent and check HTTP status first — avoids 404 killing the loop
+            HTTP_STATUS=$(gh api "$API" --silent --include 2>/dev/null | grep "^HTTP" | awk '{print $2}')
+            if [[ "$HTTP_STATUS" == "404" ]]; then
+              echo "  ⚠️  tests-trigger.yml not found in $REPO (404) — skipping"
+              echo "| $REPO | ⚠️ workflow not found | ⚠️ workflow not found | N/A |" >> $GITHUB_STEP_SUMMARY
+              continue
+            fi
+
             RUN_DATA=$(gh api "$API" --jq '.workflow_runs[0] | "\(.id)|\(.html_url)|\(.created_at)|\(.head_commit.message)"' 2>/dev/null | head -1)
 
             RUN_ID=$(echo "$RUN_DATA"   | cut -d'|' -f1)
