@@ -100,6 +100,7 @@ jobs:
 
             echo "  L1=$L1  L2=$L2"
             if [[ "$L1" == "failure" || "$L2" == "failure" ]]; then
+              echo "  ⚠️  FAILURE DETECTED in $REPO — marking overall as failed"
 
             echo ""
             echo "Failed Job Details:"
