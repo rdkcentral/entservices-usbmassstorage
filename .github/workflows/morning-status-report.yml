@@ -18,6 +18,10 @@ jobs:
     permissions:
       actions: read    # read other workflow run results
 
+    env:
+      REPO_1: rdkcentral/entservices-usbmassstorage   # current repo
+      REPO_2: rdkcentral/entservices-usbdevice         # second repo to monitor
+
     steps:
       # ── Step 0: Skip if PR was closed WITHOUT merging ──────────
       - name: Check if PR was actually merged
@@ -29,88 +33,90 @@ jobs:
           fi
           echo "PR #${{ github.event.pull_request.number }} merged → running status check."
 
-      # ── Step 1: Get latest main-workflow (tests-trigger) run ───
-      # L1/L2 are workflow_call children — they don't have their own runs.
-      # We fetch the latest run of tests-trigger.yml, then read its jobs.
-      - name: Get latest tests-trigger run ID
-        id: trigger_run
+      # ── Helper function used by both repos ─────────────────────
+      # Fetches L1/L2 results + failed stages for a given repo
+      # Called twice below — once per repo
+      - name: Fetch results for REPO_1 (usbmassstorage)
+        id: repo1
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # branch=develop → picks latest run regardless of trigger type (push/PR/dispatch)
-          API="repos/${{ github.repository }}/actions/workflows/tests-trigger.yml/runs?per_page=1&branch=develop"
+          REPO="${{ env.REPO_1 }}"
+          API="repos/$REPO/actions/workflows/tests-trigger.yml/runs?per_page=1&branch=develop"
+
           RUN_ID=$(gh api "$API"   --jq '.workflow_runs[0].id')
           RUN_URL=$(gh api "$API"  --jq '.workflow_runs[0].html_url')
           RUN_DATE=$(gh api "$API" --jq '.workflow_runs[0].created_at')
           COMMIT=$(gh api "$API"   --jq '.workflow_runs[0].head_commit.message')
+
           echo "run_id=$RUN_ID"     >> $GITHUB_OUTPUT
           echo "run_url=$RUN_URL"   >> $GITHUB_OUTPUT
           echo "run_date=$RUN_DATE" >> $GITHUB_OUTPUT
-          echo "Source run ID : $RUN_ID"
-          echo "Source commit : $COMMIT"
-          echo "Source date   : $RUN_DATE"
+          echo "[$REPO] run_id=$RUN_ID  commit=$COMMIT"
 
-      # ── Debug: confirm what run we are reading ──────────────
-      - name: Debug run details
-        run: |
-          echo "RUN_ID   = ${{ steps.trigger_run.outputs.run_id }}"
-          echo "RUN_DATE = ${{ steps.trigger_run.outputs.run_date }}"
-          echo "RUN_URL  = ${{ steps.trigger_run.outputs.run_url }}"
+          ALL_JOBS=$(gh api "repos/$REPO/actions/runs/$RUN_ID/jobs?per_page=100")
 
-      # ── Step 2: Read ALL job/step details from that run ────────
-      - name: Get L1 and L2 job results
-        id: jobs
+          L1=$(echo "$ALL_JOBS" | jq -r '.jobs[] | select(.name | test("L1|unit test";"i")) | .conclusion' | head -1)
+          L2=$(echo "$ALL_JOBS" | jq -r '.jobs[] | select(.name | test("L2";"i")) | .conclusion' | head -1)
+
+          if [[ -z "$L1" || "$L1" == "null" ]]; then
+            L1=$(gh api "repos/$REPO/actions/runs/$RUN_ID" --jq '.conclusion')
+          fi
+          [[ -z "$L2" || "$L2" == "null" ]] && L2=$L1
+
+          FAILED=$(echo "$ALL_JOBS" | jq -r '
+            .jobs[] | select(.conclusion=="failure") |
+            "JOB: \(.name)\n" +
+            (.steps[] | select(.conclusion=="failure") |
+            "  STEP \(.number): \(.name) → \(.conclusion)")')
+          [[ -z "$FAILED" ]] && FAILED="All steps passed."
+
+          echo "l1=$L1" >> $GITHUB_OUTPUT
+          echo "l2=$L2" >> $GITHUB_OUTPUT
+          { echo "failed<<EOF"; echo "$FAILED"; echo "EOF"; } >> $GITHUB_OUTPUT
+          echo "L1=$L1  L2=$L2"
+
+      - name: Fetch results for REPO_2 (usbdevice)
+        id: repo2
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          RUN_ID="${{ steps.trigger_run.outputs.run_id }}"
+          REPO="${{ env.REPO_2 }}"
+          API="repos/$REPO/actions/workflows/tests-trigger.yml/runs?per_page=1&branch=develop"
 
-          # Get full job list with each step's status inside
-          ALL_JOBS=$(gh api "repos/${{ github.repository }}/actions/runs/$RUN_ID/jobs?per_page=100")
+          RUN_ID=$(gh api "$API"   --jq '.workflow_runs[0].id')
+          RUN_URL=$(gh api "$API"  --jq '.workflow_runs[0].html_url')
+          RUN_DATE=$(gh api "$API" --jq '.workflow_runs[0].created_at')
+          COMMIT=$(gh api "$API"   --jq '.workflow_runs[0].head_commit.message')
 
-          L1=$(echo "$ALL_JOBS" | jq -r '.jobs[] | select(.name | test("L1|unit test"; "i")) | .conclusion' | head -1)
-          L2=$(echo "$ALL_JOBS" | jq -r '.jobs[] | select(.name | test("L2"; "i")) | .conclusion' | head -1)
+          echo "run_id=$RUN_ID"     >> $GITHUB_OUTPUT
+          echo "run_url=$RUN_URL"   >> $GITHUB_OUTPUT
+          echo "run_date=$RUN_DATE" >> $GITHUB_OUTPUT
+          echo "[$REPO] run_id=$RUN_ID  commit=$COMMIT"
 
-          # fallback: if job filter found nothing, use overall run conclusion
+          ALL_JOBS=$(gh api "repos/$REPO/actions/runs/$RUN_ID/jobs?per_page=100")
+
+          L1=$(echo "$ALL_JOBS" | jq -r '.jobs[] | select(.name | test("L1|unit test";"i")) | .conclusion' | head -1)
+          L2=$(echo "$ALL_JOBS" | jq -r '.jobs[] | select(.name | test("L2";"i")) | .conclusion' | head -1)
+
           if [[ -z "$L1" || "$L1" == "null" ]]; then
-            L1=$(gh api "repos/${{ github.repository }}/actions/runs/$RUN_ID" --jq '.conclusion')
-            echo "L1 job not matched by name — using overall run conclusion"
+            L1=$(gh api "repos/$REPO/actions/runs/$RUN_ID" --jq '.conclusion')
           fi
-          [[ -z "$L2" ]] && L2=$L1
+          [[ -z "$L2" || "$L2" == "null" ]] && L2=$L1
 
-          echo "l1_conclusion=$L1" >> $GITHUB_OUTPUT
-          echo "l2_conclusion=$L2" >> $GITHUB_OUTPUT
-          echo "L1 → $L1"
-          echo "L2 → $L2"
-
-          # ── Collect failed stages for each job ─────────────────
-          # For every failed job, list which STEPS inside it failed
-          FAILED_DETAIL=$(echo "$ALL_JOBS" | jq -r '
-            .jobs[] |
-            select(.conclusion == "failure") |
+          FAILED=$(echo "$ALL_JOBS" | jq -r '
+            .jobs[] | select(.conclusion=="failure") |
             "JOB: \(.name)\n" +
-            (
-              .steps[] |
-              select(.conclusion == "failure") |
-              "  STEP \(.number): \(.name) → \(.conclusion)"
-            )
-          ')
+            (.steps[] | select(.conclusion=="failure") |
+            "  STEP \(.number): \(.name) → \(.conclusion)")')
+          [[ -z "$FAILED" ]] && FAILED="All steps passed."
 
-          if [[ -z "$FAILED_DETAIL" ]]; then
-            FAILED_DETAIL="No individual step failures found."
-          fi
+          echo "l1=$L1" >> $GITHUB_OUTPUT
+          echo "l2=$L2" >> $GITHUB_OUTPUT
+          { echo "failed<<EOF"; echo "$FAILED"; echo "EOF"; } >> $GITHUB_OUTPUT
+          echo "L1=$L1  L2=$L2"
 
-          # Save for email (multiline needs special encoding)
-          {
-            echo "failed_detail<<DELIM"
-            echo "$FAILED_DETAIL"
-            echo "DELIM"
-          } >> $GITHUB_OUTPUT
-
-          echo "--- Failed stages ---"
-          echo "$FAILED_DETAIL"
-
-      # ── Step 3: Print combined summary ─────────────────────────
+      # ── Step 3: Print combined summary (both repos) ────────────
       - name: Print status summary
         run: |
           echo "========================================"
@@ -118,51 +124,55 @@ jobs:
           echo "  $(date -u +'%Y-%m-%d %H:%M UTC')"
           echo "========================================"
           echo ""
-          echo "L1-tests  →  ${{ steps.jobs.outputs.l1_conclusion }}"
-          echo "L2-tests  →  ${{ steps.jobs.outputs.l2_conclusion }}"
-          echo "Run date  :  ${{ steps.trigger_run.outputs.run_date }}"
-          echo "Run URL   :  ${{ steps.trigger_run.outputs.run_url }}"
+          echo "── entservices-usbmassstorage ──"
+          echo "  L1 → ${{ steps.repo1.outputs.l1 }}"
+          echo "  L2 → ${{ steps.repo1.outputs.l2 }}"
+          echo "  Run: ${{ steps.repo1.outputs.run_url }}"
           echo ""
-          echo "--- Failed stage details ---"
-          echo "${{ steps.jobs.outputs.failed_detail }}"
+          echo "── entservices-usbdevice ──"
+          echo "  L1 → ${{ steps.repo2.outputs.l1 }}"
+          echo "  L2 → ${{ steps.repo2.outputs.l2 }}"
+          echo "  Run: ${{ steps.repo2.outputs.run_url }}"
           echo ""
 
-          if [[ "${{ steps.jobs.outputs.l1_conclusion }}" == "failure" || \
-                "${{ steps.jobs.outputs.l2_conclusion }}" == "failure" ]]; then
+          if [[ "${{ steps.repo1.outputs.l1 }}" == "failure" || \
+                "${{ steps.repo1.outputs.l2 }}" == "failure" || \
+                "${{ steps.repo2.outputs.l1 }}" == "failure" || \
+                "${{ steps.repo2.outputs.l2 }}" == "failure" ]]; then
             echo "❌ One or more test suites FAILED"
           else
-            echo "✅ All test suites passed"
+            echo "✅ All test suites passed across both repos"
           fi
 
-      # ── Step 4: GitHub Step Summary (no secrets, no issue creation) ──
-      # Writes a formatted report into the Actions run page itself.
-      # How to see it: Actions tab → click this run → click "Summary" at the top
+      # ── Step 4: GitHub Step Summary (both repos, no secrets) ───
       - name: Write job summary
         run: |
-          if [[ "${{ steps.jobs.outputs.l1_conclusion }}" == "failure" || \
-                "${{ steps.jobs.outputs.l2_conclusion }}" == "failure" ]]; then
-            STATUS="❌ FAILED"
-          else
-            STATUS="✅ PASSED"
-          fi
-
-          cat >> $GITHUB_STEP_SUMMARY << 'SUMMARY'
-          ## L1/L2 Test Status Report
-          SUMMARY
-
           cat >> $GITHUB_STEP_SUMMARY << SUMMARY
-          **Overall:** $STATUS
-          **Run date:** ${{ steps.trigger_run.outputs.run_date }}
+          ## L1/L2 Test Status Report — $(date -u +'%Y-%m-%d %H:%M UTC')
 
-          | Workflow | Result |
-          |----------|--------|
-          | L1-tests | ${{ steps.jobs.outputs.l1_conclusion }} |
-          | L2-tests | ${{ steps.jobs.outputs.l2_conclusion }} |
+          ### entservices-usbmassstorage
+          | Test | Result |
+          |------|--------|
+          | L1   | ${{ steps.repo1.outputs.l1 }} |
+          | L2   | ${{ steps.repo1.outputs.l2 }} |
 
-          ### Failed Stage Details
+          **Failed stages:**
           \`\`\`
-          ${{ steps.jobs.outputs.failed_detail }}
+          ${{ steps.repo1.outputs.failed }}
           \`\`\`
+          [View Run →](${{ steps.repo1.outputs.run_url }})
 
-          [View Full Run →](${{ steps.trigger_run.outputs.run_url }})
+          ---
+
+          ### entservices-usbdevice
+          | Test | Result |
+          |------|--------|
+          | L1   | ${{ steps.repo2.outputs.l1 }} |
+          | L2   | ${{ steps.repo2.outputs.l2 }} |
+
+          **Failed stages:**
+          \`\`\`
+          ${{ steps.repo2.outputs.failed }}
+          \`\`\`
+          [View Run →](${{ steps.repo2.outputs.run_url }})
           SUMMARY
