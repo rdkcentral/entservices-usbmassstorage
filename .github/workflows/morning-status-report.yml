@@ -19,16 +19,11 @@ jobs:
       actions: read
 
     env:
-      # ╔══════════════════════════════════════════════════════╗
-      # ║  ADD / REMOVE REPOS HERE — one per line              ║
-      # ║  Format: owner/repo-name                             ║
-      # ╚══════════════════════════════════════════════════════╝
       REPOS: |
         rdkcentral/entservices-usbmassstorage
         rdkcentral/entservices-usbdevice
         rdkcentral/entservices-telemetry
         rdkcentral/entservices-systemservices
-        rdkcentral/entservices-testframework
 
 
     steps:
