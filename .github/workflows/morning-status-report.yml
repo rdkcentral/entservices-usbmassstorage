@@ -17,7 +17,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       actions: read    # read other workflow run results
-      issues: write    # create issues on failure (no extra secrets needed)
 
     steps:
       # ── Step 0: Skip if PR was closed WITHOUT merging ──────────
@@ -135,20 +134,25 @@ jobs:
             echo "✅ All test suites passed"
           fi
 
-      # ── Step 4: Save report as artifact (email to be added after secrets are set up) ──
-      - name: Save report
-        run: |
-      # ── Step 4: GitHub Step Summary (no secrets needed) ────────
+      # ── Step 4: GitHub Step Summary (no secrets, no issue creation) ──
       # Writes a formatted report into the Actions run page itself.
-      # Visible at: Actions tab → this run → "Summary" tab at the top.
+      # How to see it: Actions tab → click this run → click "Summary" at the top
       - name: Write job summary
         run: |
-          STATUS="${{ (steps.jobs.outputs.l1_conclusion == 'failure' || steps.jobs.outputs.l2_conclusion == 'failure') && '❌ FAILED' || '✅ PASSED' }}"
+          if [[ "${{ steps.jobs.outputs.l1_conclusion }}" == "failure" || \
+                "${{ steps.jobs.outputs.l2_conclusion }}" == "failure" ]]; then
+            STATUS="❌ FAILED"
+          else
+            STATUS="✅ PASSED"
+          fi
 
-          cat >> $GITHUB_STEP_SUMMARY << EOF
-          ## Daily L1/L2 Test Status Report
-          **Date:** ${{ steps.trigger_run.outputs.run_date }}
+          cat >> $GITHUB_STEP_SUMMARY << 'SUMMARY'
+          ## L1/L2 Test Status Report
+          SUMMARY
+
+          cat >> $GITHUB_STEP_SUMMARY << SUMMARY
           **Overall:** $STATUS
+          **Run date:** ${{ steps.trigger_run.outputs.run_date }}
 
           | Workflow | Result |
           |----------|--------|
@@ -161,30 +165,4 @@ jobs:
           \`\`\`
 
           [View Full Run →](${{ steps.trigger_run.outputs.run_url }})
-          EOF
-
-      # ── Step 5: Create GitHub Issue on failure (no secrets needed) ──
-      # Uses built-in GITHUB_TOKEN — no setup required.
-      # Creates an issue in this repo when L1 or L2 fails.
-      # Anyone watching the repo gets a GitHub notification automatically.
-      - name: Create issue on failure
-        if: steps.jobs.outputs.l1_conclusion == 'failure' || steps.jobs.outputs.l2_conclusion == 'failure'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh issue create \
-            --title "❌ L1/L2 Test Failure – ${{ steps.trigger_run.outputs.run_date }}" \
-            --body "## Test Failure Report
-
-          | Workflow | Result |
-          |----------|--------|
-          | L1-tests | ${{ steps.jobs.outputs.l1_conclusion }} |
-          | L2-tests | ${{ steps.jobs.outputs.l2_conclusion }} |
-
-          ### Failed Stages
-          \`\`\`
-          ${{ steps.jobs.outputs.failed_detail }}
-          \`\`\`
-
-          **Run URL:** ${{ steps.trigger_run.outputs.run_url }}" \
-            --label "bug"
+          SUMMARY
