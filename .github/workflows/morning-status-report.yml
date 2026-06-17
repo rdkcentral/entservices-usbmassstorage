@@ -99,6 +99,22 @@ jobs:
             [[ -z "$L2" || "$L2" == "null" ]] && L2=$L1
 
             echo "  L1=$L1  L2=$L2"
+            if [[ "$L1" == "failure" || "$L2" == "failure" ]]; then
+
+            echo ""
+            echo "Failed Job Details:"
+            echo "$ALL_JOBS" | jq -r '
+              .jobs[]
+              | select(.conclusion=="failure")
+              | "  JOB: " + .name,
+                (
+                  .steps[]
+                  | select(.conclusion=="failure")
+                  | "    STEP " + (.number|tostring) + ": " + .name
+                )
+            '
+
+            fi
             [[ "$L1" == "failure" || "$L2" == "failure" ]] && OVERALL_STATUS="failure"
 
             L1_ICON=$([[ "$L1" == "success" ]] && echo "✅" || echo "❌")
