@@ -40,60 +40,61 @@ jobs:
 
       # ── Step 1: Loop through all repos, collect results ────────
       - name: Collect L1/L2 results from all repos
-        id: collect
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           OVERALL_STATUS="success"
-          SUMMARY_TABLE=""
-          FAILED_SECTIONS=""
+
+          # Write Summary header directly — no passing through outputs
+          echo "## L1/L2 Test Status Report — $(date -u +'%Y-%m-%d %H:%M UTC')" >> $GITHUB_STEP_SUMMARY
+          echo ""                                                                 >> $GITHUB_STEP_SUMMARY
+          echo "| Repository | L1 | L2 | Last Run |"                            >> $GITHUB_STEP_SUMMARY
+          echo "|------------|----|----|----------|"                             >> $GITHUB_STEP_SUMMARY
 
           while IFS= read -r REPO; do
-            # skip blank lines
             [[ -z "$REPO" ]] && continue
 
             echo "──────────────────────────────────────"
             echo "Processing: $REPO"
 
             API="repos/$REPO/actions/workflows/tests-trigger.yml/runs?per_page=1&branch=develop"
+            RUN_DATA=$(gh api "$API" --jq '.workflow_runs[0] | "\(.id)|\(.html_url)|\(.created_at)|\(.head_commit.message)"' 2>/dev/null | head -1)
 
-            RUN_ID=$(gh api "$API"   --jq '.workflow_runs[0].id'                2>/dev/null)
-            RUN_URL=$(gh api "$API"  --jq '.workflow_runs[0].html_url'           2>/dev/null)
-            RUN_DATE=$(gh api "$API" --jq '.workflow_runs[0].created_at'         2>/dev/null)
-            COMMIT=$(gh api "$API"   --jq '.workflow_runs[0].head_commit.message' 2>/dev/null | head -1)
+            RUN_ID=$(echo "$RUN_DATA"   | cut -d'|' -f1)
+            RUN_URL=$(echo "$RUN_DATA"  | cut -d'|' -f2)
+            RUN_DATE=$(echo "$RUN_DATA" | cut -d'|' -f3)
+            COMMIT=$(echo "$RUN_DATA"   | cut -d'|' -f4)
 
             if [[ -z "$RUN_ID" || "$RUN_ID" == "null" ]]; then
-              echo "  ⚠️  No runs found for $REPO — skipping"
-              SUMMARY_TABLE+="| $REPO | ⚠️ no data | ⚠️ no data | N/A |\n"
+              echo "  ⚠️  No runs found — skipping"
+              echo "| $REPO | ⚠️ no data | ⚠️ no data | N/A |" >> $GITHUB_STEP_SUMMARY
               continue
             fi
 
-            echo "  Run ID : $RUN_ID"
+            echo "  Run ID : $RUN_ID  Date: $RUN_DATE"
             echo "  Commit : $COMMIT"
-            echo "  Date   : $RUN_DATE"
 
             ALL_JOBS=$(gh api "repos/$REPO/actions/runs/$RUN_ID/jobs?per_page=100" 2>/dev/null)
 
             L1=$(echo "$ALL_JOBS" | jq -r '.jobs[] | select(.name | test("L1|unit test";"i")) | .conclusion' | head -1)
             L2=$(echo "$ALL_JOBS" | jq -r '.jobs[] | select(.name | test("L2";"i")) | .conclusion' | head -1)
 
-            # fallback to overall run conclusion if job names not matched
             if [[ -z "$L1" || "$L1" == "null" ]]; then
               L1=$(gh api "repos/$REPO/actions/runs/$RUN_ID" --jq '.conclusion' 2>/dev/null)
+              echo "  L1 job not matched by name — using overall run conclusion"
             fi
             [[ -z "$L2" || "$L2" == "null" ]] && L2=$L1
 
             echo "  L1=$L1  L2=$L2"
-
-            # Mark overall as failed if any repo fails
             [[ "$L1" == "failure" || "$L2" == "failure" ]] && OVERALL_STATUS="failure"
 
-            # Build summary table row
             L1_ICON=$([[ "$L1" == "success" ]] && echo "✅" || echo "❌")
             L2_ICON=$([[ "$L2" == "success" ]] && echo "✅" || echo "❌")
-            SUMMARY_TABLE+="| [$REPO]($RUN_URL) | $L1_ICON $L1 | $L2_ICON $L2 | $RUN_DATE |\n"
 
-            # Collect failed step details for this repo
+            # Write table row directly to summary
+            echo "| [$REPO]($RUN_URL) | $L1_ICON $L1 | $L2_ICON $L2 | $RUN_DATE |" >> $GITHUB_STEP_SUMMARY
+
+            # Collect and write failed step details
             FAILED=$(echo "$ALL_JOBS" | jq -r '
               .jobs[] | select(.conclusion=="failure") |
               "JOB: \(.name)\n" +
@@ -101,49 +102,21 @@ jobs:
               "  STEP \(.number): \(.name) → \(.conclusion)")' 2>/dev/null)
 
             if [[ -n "$FAILED" ]]; then
-              FAILED_SECTIONS+="#### $REPO\n\`\`\`\n$FAILED\n\`\`\`\n"
+              echo ""                              >> $GITHUB_STEP_SUMMARY
+              echo "**Failed stages — $REPO:**"   >> $GITHUB_STEP_SUMMARY
+              echo '```'                           >> $GITHUB_STEP_SUMMARY
+              echo "$FAILED"                       >> $GITHUB_STEP_SUMMARY
+              echo '```'                           >> $GITHUB_STEP_SUMMARY
+              echo "[View Run →]($RUN_URL)"        >> $GITHUB_STEP_SUMMARY
             fi
 
           done <<< "$REPOS"
 
-          # Save outputs for next step
-          echo "overall_status=$OVERALL_STATUS" >> $GITHUB_OUTPUT
-          {
-            echo "summary_table<<EOF"
-            printf "$SUMMARY_TABLE"
-            echo "EOF"
-          } >> $GITHUB_OUTPUT
-          {
-            echo "failed_sections<<EOF"
-            printf "$FAILED_SECTIONS"
-            echo "EOF"
-          } >> $GITHUB_OUTPUT
-          cat >> $GITHUB_STEP_SUMMARY << SUMMARY
-          ## L1/L2 Test Status Report — $(date -u +'%Y-%m-%d %H:%M UTC')
-
-          ### entservices-usbmassstorage
-          | Test | Result |
-          |------|--------|
-          | L1   | ${{ steps.repo1.outputs.l1 }} |
-          | L2   | ${{ steps.repo1.outputs.l2 }} |
-
-          **Failed stages:**
-          \`\`\`
-          ${{ steps.repo1.outputs.failed }}
-          \`\`\`
-          [View Run →](${{ steps.repo1.outputs.run_url }})
-
-          ---
-
-          ### entservices-usbdevice
-          | Test | Result |
-          |------|--------|
-          | L1   | ${{ steps.repo2.outputs.l1 }} |
-          | L2   | ${{ steps.repo2.outputs.l2 }} |
-
-          **Failed stages:**
-          \`\`\`
-          ${{ steps.repo2.outputs.failed }}
-          \`\`\`
-          [View Run →](${{ steps.repo2.outputs.run_url }})
-          SUMMARY
+          echo ""                                                         >> $GITHUB_STEP_SUMMARY
+          if [[ "$OVERALL_STATUS" == "failure" ]]; then
+            echo "**Overall: ❌ One or more test suites FAILED**"        >> $GITHUB_STEP_SUMMARY
+            echo "❌ One or more test suites FAILED"
+          else
+            echo "**Overall: ✅ All test suites passed**"                >> $GITHUB_STEP_SUMMARY
+            echo "✅ All test suites passed"
+          fi
