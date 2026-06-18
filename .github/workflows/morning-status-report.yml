@@ -24,6 +24,20 @@ jobs:
         rdkcentral/entservices-usbdevice
         rdkcentral/entservices-telemetry
         rdkcentral/entservices-systemservices
+        rdkcentral/entservices-avinput
+        rdkcentral/entservices-hdcpprofile
+        rdkcentral/entservices-hdmicecsource
+        rdkcentral/entservices-hdmicecsink
+        rdkcentral/entservices-devicediagnostics
+        rdkcentral/entservices-deviceinfo
+        rdkcentral/entservices-displayinfo
+        rdkcentral/entservices-displaysettings
+        rdkcentral/entservices-framerate
+        rdkcentral/entservices-powermanager
+        rdkcentral/entservices-systemmode
+        rdkcentral/entservices-systemservices
+        rdkcentral/entservices-userpreferences
+        rdkcentral/entservices-warehouse
 
 
     steps:
