@@ -61,8 +61,8 @@ jobs:
           # Write Summary header directly — no passing through outputs
           echo "## L1/L2 Test Status Report — $(date -u +'%Y-%m-%d %H:%M UTC')" >> $GITHUB_STEP_SUMMARY
           echo ""                                                                 >> $GITHUB_STEP_SUMMARY
-          echo "| Repository | L1 | L2 | Last Run |"                            >> $GITHUB_STEP_SUMMARY
-          echo "|------------|----|----|----------|"                             >> $GITHUB_STEP_SUMMARY
+          echo "| Repository | L1 | L2 | Status | Last Run | Link |"            >> $GITHUB_STEP_SUMMARY
+          echo "|------------|----|----|--------|----------|------|"             >> $GITHUB_STEP_SUMMARY
 
           while IFS= read -r REPO; do
             [[ -z "$REPO" ]] && continue
@@ -76,7 +76,7 @@ jobs:
             HTTP_STATUS=$(gh api "$API" --silent --include 2>/dev/null | grep "^HTTP" | awk '{print $2}')
             if [[ "$HTTP_STATUS" == "404" ]]; then
               echo "  ⚠️  tests-trigger.yml not found in $REPO (404) — skipping"
-              echo "| $REPO | ⚠️ workflow not found | ⚠️ workflow not found | N/A |" >> $GITHUB_STEP_SUMMARY
+              echo "| $REPO | ⚠️ | ⚠️ | workflow not found | N/A | N/A |" >> $GITHUB_STEP_SUMMARY
               continue
             fi
 
@@ -89,7 +89,7 @@ jobs:
 
             if [[ -z "$RUN_ID" || "$RUN_ID" == "null" ]]; then
               echo "  ⚠️  No runs found — skipping"
-              echo "| $REPO | ⚠️ no data | ⚠️ no data | N/A |" >> $GITHUB_STEP_SUMMARY
+              echo "| $REPO | ⚠️ | ⚠️ | no runs on develop | N/A | N/A |" >> $GITHUB_STEP_SUMMARY
               continue
             fi
 
@@ -127,27 +127,23 @@ jobs:
             fi
             [[ "$L1" == "failure" || "$L2" == "failure" ]] && OVERALL_STATUS="failure"
 
-            L1_ICON=$([[ "$L1" == "success" ]] && echo "✅" || echo "❌")
-            L2_ICON=$([[ "$L2" == "success" ]] && echo "✅" || echo "❌")
+            L1_ICON=$([[ "$L1" == "success" ]] && echo "Success✅" || echo "Failed❌")
+            L2_ICON=$([[ "$L2" == "success" ]] && echo "Success✅" || echo "Failed❌")
 
-            # Write table row directly to summary
-            echo "| [$REPO]($RUN_URL) | $L1_ICON $L1 | $L2_ICON $L2 | $RUN_DATE |" >> $GITHUB_STEP_SUMMARY
-
-            # Collect and write failed step details
-            FAILED=$(echo "$ALL_JOBS" | jq -r '
-              .jobs[] | select(.conclusion=="failure") |
-              "JOB: \(.name)\n" +
-              (.steps[] | select(.conclusion=="failure") |
-              "  STEP \(.number): \(.name) → \(.conclusion)")' 2>/dev/null)
-
-            if [[ -n "$FAILED" ]]; then
-              echo ""                              >> $GITHUB_STEP_SUMMARY
-              echo "**Failed stages — $REPO:**"   >> $GITHUB_STEP_SUMMARY
-              echo '```'                           >> $GITHUB_STEP_SUMMARY
-              echo "$FAILED"                       >> $GITHUB_STEP_SUMMARY
-              echo '```'                           >> $GITHUB_STEP_SUMMARY
-              echo "[View Run →]($RUN_URL)"        >> $GITHUB_STEP_SUMMARY
+            # Build inline status cell — show failed job+step if any, else "All passed"
+            if [[ "$L1" == "failure" || "$L2" == "failure" ]]; then
+              FAILED_INLINE=$(echo "$ALL_JOBS" | jq -r '
+                .jobs[] | select(.conclusion=="failure") |
+                .name as $job |
+                .steps[] | select(.conclusion=="failure") |
+                $job + " → STEP " + (.number|tostring) + ": " + .name' 2>/dev/null | head -3 | tr '\n' ' | ')
+              STATUS_CELL="❌ Failed: $FAILED_INLINE"
+            else
+              STATUS_CELL="✅ All passed"
             fi
+
+            # Write single table row with all info
+            echo "| [$REPO]($RUN_URL) | $L1_ICON | $L2_ICON | $STATUS_CELL | $RUN_DATE | [View →]($RUN_URL) |" >> $GITHUB_STEP_SUMMARY
 
           done <<< "$REPOS"
 
