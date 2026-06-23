@@ -38,6 +38,7 @@ jobs:
         rdkcentral/entservices-systemservices
         rdkcentral/entservices-userpreferences
         rdkcentral/entservices-warehouse
+        rdkcentral/entservices-migration
 
 
     steps:
