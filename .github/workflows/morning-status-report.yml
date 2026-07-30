@@ -134,7 +134,7 @@ jobs:
             L2_ICON=$([[ "$L2" == "success" ]] && echo "Success✅" || echo "Failed❌")
 
             # ── Coverity: query native_full_build.yml ────────────
-            COV_API="repos/$REPO/actions/workflows/native_full_build.yml/runs?per_page=1&branch=develop"
+            COV_API="repos/$REPO/actions/workflows/native_full_build.yml/runs?per_page=1&branch=develop&event=push"
             COV_HTTP=$(gh api "$COV_API" --silent --include 2>/dev/null | grep "^HTTP" | awk '{print $2}')
             if [[ "$COV_HTTP" == "404" ]]; then
               COV_CONCLUSION="N/A"
