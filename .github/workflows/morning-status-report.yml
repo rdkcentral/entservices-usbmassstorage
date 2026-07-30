@@ -64,8 +64,8 @@ jobs:
           # Write Summary header directly — no passing through outputs
           echo "## L1/L2 Test Status Report — $(date -u +'%Y-%m-%d %H:%M UTC')" >> $GITHUB_STEP_SUMMARY
           echo ""                                                                 >> $GITHUB_STEP_SUMMARY
-          echo "| Repository | L1 | L2 | Status | Last Run | Link |"            >> $GITHUB_STEP_SUMMARY
-          echo "|------------|----|----|--------|----------|------|"             >> $GITHUB_STEP_SUMMARY
+          echo "| Repository | L1 | L2 | Coverity | Status | Last Run | Link |"            >> $GITHUB_STEP_SUMMARY
+          echo "|------------|----|----|----------|--------|----------|------|"             >> $GITHUB_STEP_SUMMARY
 
           while IFS= read -r REPO; do
             [[ -z "$REPO" ]] && continue
@@ -79,7 +79,7 @@ jobs:
             HTTP_STATUS=$(gh api "$API" --silent --include 2>/dev/null | grep "^HTTP" | awk '{print $2}')
             if [[ "$HTTP_STATUS" == "404" ]]; then
               echo "  ⚠️  tests-trigger.yml not found in $REPO (404) — skipping"
-              echo "| $REPO | ⚠️ | ⚠️ | workflow not found | N/A | N/A |" >> $GITHUB_STEP_SUMMARY
+              echo "| [$REPO](https://github.com/$REPO) | ⚠️ | ⚠️ | ⚠️ | workflow not found | N/A | N/A |" >> $GITHUB_STEP_SUMMARY
               continue
             fi
 
@@ -92,7 +92,7 @@ jobs:
 
             if [[ -z "$RUN_ID" || "$RUN_ID" == "null" ]]; then
               echo "  ⚠️  No runs found — skipping"
-              echo "| $REPO | ⚠️ | ⚠️ | no runs on develop | N/A | N/A |" >> $GITHUB_STEP_SUMMARY
+              echo "| [$REPO](https://github.com/$REPO) | ⚠️ | ⚠️ | ⚠️ | no runs on develop | N/A | N/A |" >> $GITHUB_STEP_SUMMARY
               continue
             fi
 
@@ -133,6 +133,18 @@ jobs:
             L1_ICON=$([[ "$L1" == "success" ]] && echo "Success✅" || echo "Failed❌")
             L2_ICON=$([[ "$L2" == "success" ]] && echo "Success✅" || echo "Failed❌")
 
+            # ── Coverity: query native_full_build.yml ────────────
+            COV_API="repos/$REPO/actions/workflows/native_full_build.yml/runs?per_page=1&branch=develop"
+            COV_HTTP=$(gh api "$COV_API" --silent --include 2>/dev/null | grep "^HTTP" | awk '{print $2}')
+            if [[ "$COV_HTTP" == "404" ]]; then
+              COV_CONCLUSION="N/A"
+            else
+              COV_CONCLUSION=$(gh api "$COV_API" --jq '.workflow_runs[0].conclusion' 2>/dev/null)
+              [[ -z "$COV_CONCLUSION" || "$COV_CONCLUSION" == "null" ]] && COV_CONCLUSION="no data"
+            fi
+            COV_ICON=$([[ "$COV_CONCLUSION" == "success" ]] && echo "✅" || ([[ "$COV_CONCLUSION" == "failure" ]] && echo "❌" || echo "⚠️"))
+            [[ "$COV_CONCLUSION" == "failure" ]] && OVERALL_STATUS="failure"
+
             # Build inline status cell — show failed job+step if any, else "All passed"
             if [[ "$L1" == "failure" || "$L2" == "failure" ]]; then
               FAILED_INLINE=$(echo "$ALL_JOBS" | jq -r '
@@ -145,8 +157,8 @@ jobs:
               STATUS_CELL="✅ All passed"
             fi
 
-            # Write single table row with all info
-            echo "| [$REPO]($RUN_URL) | $L1_ICON | $L2_ICON | $STATUS_CELL | $RUN_DATE | [View →]($RUN_URL) |" >> $GITHUB_STEP_SUMMARY
+            # Write single table row — repo link → repo home, Link → run
+            echo "| [$REPO](https://github.com/$REPO) | $L1_ICON | $L2_ICON | $COV_ICON $COV_CONCLUSION | $STATUS_CELL | $RUN_DATE | [View →]($RUN_URL) |" >> $GITHUB_STEP_SUMMARY
 
           done <<< "$REPOS"
 
