@@ -39,6 +39,8 @@ jobs:
         rdkcentral/entservices-userpreferences
         rdkcentral/entservices-warehouse
         rdkcentral/entservices-migration
+        rdkcentral/entservices-ocicontainer
+        rdkcentral/entservices-usersettings
         
 
 
