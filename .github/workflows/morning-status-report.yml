@@ -41,6 +41,41 @@ jobs:
         rdkcentral/entservices-migration
         rdkcentral/entservices-ocicontainer
         rdkcentral/entservices-usersettings
+
+        rdkcentral/entservices-account
+        rdkcentral/entservices-backupmanager
+        rdkcentral/entservices-casting
+        rdkcentral/entservices-cloudstore
+        rdkcentral/entservices-connectivity
+        rdkcentral/entservices-cryptography
+        rdkcentral/entservices-firmwaredownload
+        rdkcentral/entservices-firmwareupdate
+        rdkcentral/entservices-frontpanel
+        rdkcentral/entservices-helpers
+        rdkcentral/entservices-ledcontrol
+        rdkcentral/entservices-linearplaybackcontrol
+        rdkcentral/entservices-maintenancemanager
+        rdkcentral/entservices-mediaanddrm
+        rdkcentral/entservices-messagecontrol
+        rdkcentral/entservices-miracast
+        rdkcentral/entservices-monitor
+        rdkcentral/entservices-motiondetection
+        rdkcentral/entservices-nativejs
+        rdkcentral/entservices-opencdmi
+        rdkcentral/entservices-peripherals
+        rdkcentral/entservices-persistentstore
+        rdkcentral/entservices-playerinfo
+        rdkcentral/entservices-remotecontrol
+        rdkcentral/entservices-resourcemanager
+        rdkcentral/entservices-runtime
+        rdkcentral/entservices-screencapture
+        rdkcentral/entservices-sharedstorage
+        rdkcentral/entservices-systemaudioplayer
+        rdkcentral/entservices-texttospeech
+        rdkcentral/entservices-voicecontrol
+        rdkcentral/entservices-xcast
+        rdkcentral/entservices-telemetrymetrics
+
         
 
 
