@@ -41,7 +41,6 @@ jobs:
         rdkcentral/entservices-migration
         rdkcentral/entservices-ocicontainer
         rdkcentral/entservices-usersettings
-
         rdkcentral/entservices-account
         rdkcentral/entservices-backupmanager
         rdkcentral/entservices-casting
