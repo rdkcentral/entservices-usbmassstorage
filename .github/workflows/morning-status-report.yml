@@ -35,7 +35,6 @@ jobs:
         rdkcentral/entservices-framerate
         rdkcentral/entservices-powermanager
         rdkcentral/entservices-systemmode
-        rdkcentral/entservices-systemservices
         rdkcentral/entservices-userpreferences
         rdkcentral/entservices-warehouse
         rdkcentral/entservices-migration
