@@ -29,7 +29,7 @@
 #include "tracing/Logging.h"
 #include <mutex>
 
-namespace WPEFramework {
+namespace Thunder {
 namespace Plugin {
 
     class USBMassStorage: public PluginHost::IPlugin, public PluginHost::JSONRPCErrorAssessor<PluginHost::JSONRPCErrorAssessorTypes::FunctionCallbackType> 
@@ -102,4 +102,4 @@ namespace Plugin {
     };
 
 } // namespace Plugin
-} // namespace WPEFramework
+} // namespace Thunder

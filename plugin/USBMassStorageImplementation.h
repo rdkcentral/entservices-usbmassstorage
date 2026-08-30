@@ -44,12 +44,12 @@ using std::ofstream;
 #undef MS_RDONLY
 #include <sys/mount.h>
 
-using USBDevice = WPEFramework::Exchange::IUSBDevice::USBDevice;
-using USBStorageFileSystem = WPEFramework::Exchange::IUSBMassStorage::USBStorageFileSystem;
-using USBStorageDeviceInfo = WPEFramework::Exchange::IUSBMassStorage::USBStorageDeviceInfo;
-using USBStorageMountFlags = WPEFramework::Exchange::IUSBMassStorage::USBStorageMountFlags;
+using USBDevice = Thunder::Exchange::IUSBDevice::USBDevice;
+using USBStorageFileSystem = Thunder::Exchange::IUSBMassStorage::USBStorageFileSystem;
+using USBStorageDeviceInfo = Thunder::Exchange::IUSBMassStorage::USBStorageDeviceInfo;
+using USBStorageMountFlags = Thunder::Exchange::IUSBMassStorage::USBStorageMountFlags;
 
-namespace WPEFramework {
+namespace Thunder {
 namespace Plugin {
     class USBMassStorageImplementation : public Exchange::IUSBMassStorage,
                                          public Exchange::IConfiguration {
@@ -130,11 +130,7 @@ namespace Plugin {
 
        public:
             static Core::ProxyType<Core::IDispatch> Create(USBMassStorageImplementation* usb_mass_storageImplementation, Event event, USBStorageDeviceInfo params ) {
-#ifndef USE_THUNDER_R4
-                return (Core::proxy_cast<Core::IDispatch>(Core::ProxyType<Job>::Create(usb_mass_storageImplementation, event, params)));
-#else
                 return (Core::ProxyType<Core::IDispatch>(Core::ProxyType<Job>::Create(usb_mass_storageImplementation, event, params)));
-#endif
             }
 
             virtual void Dispatch() {
@@ -184,4 +180,4 @@ namespace Plugin {
         friend class Job;
     };
 } // namespace Plugin
-} // namespace WPEFramework
+} // namespace Thunder

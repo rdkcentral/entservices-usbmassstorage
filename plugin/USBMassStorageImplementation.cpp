@@ -37,7 +37,7 @@
 
 using namespace std;
 
-namespace WPEFramework {
+namespace Thunder {
 namespace Plugin {
 
     SERVICE_REGISTRATION(USBMassStorageImplementation, 1, 0);
@@ -61,7 +61,7 @@ namespace Plugin {
             _service = service;
             _service->AddRef();
             result = Core::ERROR_NONE;
-            _remoteUSBDeviceObject = _service->QueryInterfaceByCallsign<WPEFramework::Exchange::IUSBDevice>("org.rdk.UsbDevice");
+            _remoteUSBDeviceObject = _service->QueryInterfaceByCallsign<Thunder::Exchange::IUSBDevice>("org.rdk.UsbDevice");
             if (_remoteUSBDeviceObject != nullptr)
             {
                 registerEventHandlers();
