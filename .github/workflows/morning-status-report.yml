@@ -75,9 +75,6 @@ jobs:
         rdkcentral/entservices-telemetrymetrics
         
 
-        
-
-
     steps:
       # ── Step 0: Skip if PR was closed WITHOUT merging ──────────
       - name: Check if PR was actually merged
@@ -91,8 +88,10 @@ jobs:
 
       # ── Step 1: Loop through all repos, collect results ────────
       - name: Collect L1/L2 results from all repos
+        if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # GITHUB_TOKEN only covers this repo; ORG_READ_TOKEN needs actions:read on all rdkcentral/* repos
+          GH_TOKEN: ${{ secrets.ORG_READ_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           OVERALL_STATUS="success"
 
@@ -108,22 +107,21 @@ jobs:
             echo "──────────────────────────────────────"
             echo "Processing: $REPO"
 
-            API="repos/$REPO/actions/workflows/tests-trigger.yml/runs?per_page=1&branch=develop"
+            # status=completed ensures we never read a null conclusion from an in-progress run
+            API="repos/$REPO/actions/workflows/tests-trigger.yml/runs?per_page=1&branch=develop&status=completed"
 
-            # Use --silent and check HTTP status first — avoids 404 killing the loop
-            HTTP_STATUS=$(gh api "$API" --silent --include 2>/dev/null | grep "^HTTP" | awk '{print $2}')
-            if [[ "$HTTP_STATUS" == "404" ]]; then
-              echo "  ⚠️  tests-trigger.yml not found in $REPO (404) — skipping"
+            # Single call — gh api exits non-zero on 404/errors, avoids double round-trip
+            if ! RUN_JSON=$(gh api "$API" 2>/dev/null); then
+              echo "  ⚠️  tests-trigger.yml not found or inaccessible in $REPO — skipping"
               echo "| [$REPO](https://github.com/$REPO) | ⚠️ | ⚠️ | ⚠️ | workflow not found | N/A | N/A |" >> $GITHUB_STEP_SUMMARY
               continue
             fi
 
-            RUN_DATA=$(gh api "$API" --jq '.workflow_runs[0] | "\(.id)|\(.html_url)|\(.created_at)|\(.head_commit.message)"' 2>/dev/null | head -1)
-
-            RUN_ID=$(echo "$RUN_DATA"   | cut -d'|' -f1)
-            RUN_URL=$(echo "$RUN_DATA"  | cut -d'|' -f2)
-            RUN_DATE=$(echo "$RUN_DATA" | cut -d'|' -f3)
-            COMMIT=$(echo "$RUN_DATA"   | cut -d'|' -f4)
+            # Parse each field separately — commit messages can contain '|' and corrupt delimited parsing
+            RUN_ID=$(echo "$RUN_JSON"   | jq -r '.workflow_runs[0].id              // empty')
+            RUN_URL=$(echo "$RUN_JSON"  | jq -r '.workflow_runs[0].html_url        // empty')
+            RUN_DATE=$(echo "$RUN_JSON" | jq -r '.workflow_runs[0].created_at      // empty')
+            COMMIT=$(echo "$RUN_JSON"   | jq -r '.workflow_runs[0].head_commit.message // empty' | head -1)
 
             if [[ -z "$RUN_ID" || "$RUN_ID" == "null" ]]; then
               echo "  ⚠️  No runs found — skipping"
@@ -140,54 +138,53 @@ jobs:
             L2=$(echo "$ALL_JOBS" | jq -r '.jobs[] | select(.name | test("L2";"i")) | .conclusion' | head -1)
 
             if [[ -z "$L1" || "$L1" == "null" ]]; then
-              L1=$(gh api "repos/$REPO/actions/runs/$RUN_ID" --jq '.conclusion' 2>/dev/null)
+              L1=$(gh api "repos/$REPO/actions/runs/$RUN_ID" --jq '.conclusion // empty' 2>/dev/null)
               echo "  L1 job not matched by name — using overall run conclusion"
             fi
-            [[ -z "$L2" || "$L2" == "null" ]] && L2=$L1
+            # N/A when no L2 job exists — avoids showing a false inherited status from L1
+            if [[ -z "$L2" || "$L2" == "null" ]]; then
+              L2="N/A"
+            fi
 
             echo "  L1=$L1  L2=$L2"
-            if [[ "$L1" == "failure" || "$L2" == "failure" ]]; then
-              echo "  ⚠️  FAILURE DETECTED in $REPO — marking overall as failed"
-
-            echo ""
-            echo "Failed Job Details:"
-            echo "$ALL_JOBS" | jq -r '
-              .jobs[]
-              | select(.conclusion=="failure")
-              | "  JOB: " + .name,
-                (
-                  .steps[]
-                  | select(.conclusion=="failure")
-                  | "    STEP " + (.number|tostring) + ": " + .name
-                )
-            '
-
+            # Treat any non-success conclusion as failure; N/A (no job found) is not a failure
+            if [[ "$L1" != "success" || ("$L2" != "success" && "$L2" != "N/A") ]]; then
+              echo "  ⚠️  NON-SUCCESS in $REPO (L1=$L1, L2=$L2) — marking overall as failed"
+              OVERALL_STATUS="failure"
+              echo ""
+              echo "Non-success Job Details:"
+              echo "$ALL_JOBS" | jq -r '
+                .jobs[]
+                | select(.conclusion != "success" and .conclusion != null)
+                | "  JOB: " + .name + " (" + .conclusion + ")",
+                  (
+                    (.steps // [])[]
+                    | select(.conclusion != "success" and .conclusion != null)
+                    | "    STEP " + (.number|tostring) + ": " + .name + " (" + .conclusion + ")"
+                  )
+              '
             fi
-            [[ "$L1" == "failure" || "$L2" == "failure" ]] && OVERALL_STATUS="failure"
 
             L1_ICON=$([[ "$L1" == "success" ]] && echo "Success✅" || echo "Failed❌")
-            L2_ICON=$([[ "$L2" == "success" ]] && echo "Success✅" || echo "Failed❌")
+            L2_ICON=$([[ "$L2" == "success" ]] && echo "Success✅" || ([[ "$L2" == "N/A" ]] && echo "N/A" || echo "Failed❌"))
 
             # ── Coverity: query native_full_build.yml ────────────
-            COV_API="repos/$REPO/actions/workflows/native_full_build.yml/runs?per_page=1&branch=develop&event=push"
-            COV_HTTP=$(gh api "$COV_API" --silent --include 2>/dev/null | grep "^HTTP" | awk '{print $2}')
-            if [[ "$COV_HTTP" == "404" ]]; then
+            COV_API="repos/$REPO/actions/workflows/native_full_build.yml/runs?per_page=1&branch=develop&event=push&status=completed"
+            if ! COV_JSON=$(gh api "$COV_API" 2>/dev/null); then
               COV_CONCLUSION="N/A"
             else
-              COV_CONCLUSION=$(gh api "$COV_API" --jq '.workflow_runs[0].conclusion' 2>/dev/null)
+              COV_CONCLUSION=$(echo "$COV_JSON" | jq -r '.workflow_runs[0].conclusion // empty')
               [[ -z "$COV_CONCLUSION" || "$COV_CONCLUSION" == "null" ]] && COV_CONCLUSION="no data"
             fi
             COV_ICON=$([[ "$COV_CONCLUSION" == "success" ]] && echo "✅" || ([[ "$COV_CONCLUSION" == "failure" ]] && echo "❌" || echo "⚠️"))
             [[ "$COV_CONCLUSION" == "failure" ]] && OVERALL_STATUS="failure"
 
-            # Build inline status cell — show failed job+step if any, else "All passed"
-            if [[ "$L1" == "failure" || "$L2" == "failure" ]]; then
+            # Consistent with icons: any non-success conclusion is a failure; N/A means no job was found
+            if [[ "$L1" != "success" || ("$L2" != "success" && "$L2" != "N/A") ]]; then
               FAILED_INLINE=$(echo "$ALL_JOBS" | jq -r '
-                .jobs[] | select(.conclusion=="failure") |
-                .name as $job |
-                .steps[] | select(.conclusion=="failure") |
-                $job + " → STEP " + (.number|tostring) + ": " + .name' 2>/dev/null | head -3 | tr '\n' ' | ')
-              STATUS_CELL="❌ Failed: $FAILED_INLINE"
+                .jobs[] | select(.conclusion != "success" and .conclusion != null) |
+                .name + " (" + .conclusion + ")"' 2>/dev/null | head -3 | tr '\n' ' | ')
+              STATUS_CELL="❌ Not passed: $FAILED_INLINE"
             else
               STATUS_CELL="✅ All passed"
             fi
@@ -195,7 +192,7 @@ jobs:
             # Write single table row — repo link → repo home, Link → run
             echo "| [$REPO](https://github.com/$REPO) | $L1_ICON | $L2_ICON | $COV_ICON $COV_CONCLUSION | $STATUS_CELL | $RUN_DATE | [View →]($RUN_URL) |" >> $GITHUB_STEP_SUMMARY
 
-          done <<< "$REPOS"
+          done < <(echo "$REPOS" | awk 'NF && !seen[$0]++')
 
           echo ""                                                         >> $GITHUB_STEP_SUMMARY
           if [[ "$OVERALL_STATUS" == "failure" ]]; then
