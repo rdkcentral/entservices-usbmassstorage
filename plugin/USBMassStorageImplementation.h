@@ -166,7 +166,7 @@ namespace Plugin {
         mutable Core::CriticalSection _adminLock;
         Exchange::IUSBDevice* _remoteUSBDeviceObject;
         std::list<Exchange::IUSBMassStorage::INotification*> _usbStorageNotification;
-        Core::Sink<USBDeviceNotification> _USB_DeviceNotification;
+        Core::SinkType<USBDeviceNotification> _USB_DeviceNotification;
         bool _registeredEventHandlers;
         PluginHost::IShell* _service;
 

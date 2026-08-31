@@ -465,7 +465,7 @@ MATCHER_P(MatchRequestStatus, data, "")
 TEST_F(USBMassStorageTest, comrpc_getpartitionInfo_success)
 {
     uint32_t status = Core::ERROR_GENERAL;
-    Core::Sink<USBMassStorageNotificationHandler> notification;
+    Core::SinkType<USBMassStorageNotificationHandler> notification;
     uint32_t signalled = USBMassStorage_StateInvalid;
     Exchange::IUSBMassStorage::IUSBStorageMountInfoIterator* mountPoints = {};
     Thunder::Exchange::IUSBMassStorage::USBStoragePartitionInfo partitionInfo = {};
@@ -623,7 +623,7 @@ TEST_F(USBMassStorageTest, comrpc_getpartitionInfo_success)
 TEST_F(USBMassStorageTest, comrpc_getDeviceListAndMount_success)
 {
     uint32_t status = Core::ERROR_GENERAL;
-    Core::Sink<USBMassStorageNotificationHandler> notification;
+    Core::SinkType<USBMassStorageNotificationHandler> notification;
     uint32_t signalled = USBMassStorage_StateInvalid;
     Exchange::IUSBMassStorage::IUSBStorageMountInfoIterator* mountPoints = {};
     Exchange::IUSBMassStorage::IUSBStorageDeviceInfoIterator* deviceInfo = nullptr;
@@ -840,7 +840,7 @@ TEST_F(USBMassStorageTest, comrpc_getDeviceListAndMount_success)
 TEST_F(USBMassStorageTest, comrpc_mount_failure)
 {
     uint32_t status = Core::ERROR_GENERAL;
-    Core::Sink<USBMassStorageNotificationHandler> notification;
+    Core::SinkType<USBMassStorageNotificationHandler> notification;
     uint32_t signalled = USBMassStorage_StateInvalid;
     Exchange::IUSBMassStorage::IUSBStorageDeviceInfoIterator* deviceInfo = nullptr;
 
@@ -928,7 +928,7 @@ TEST_F(USBMassStorageTest, comrpc_mount_failure)
 TEST_F(USBMassStorageTest, comrpc_open_failure)
 {
     uint32_t status = Core::ERROR_GENERAL;
-    Core::Sink<USBMassStorageNotificationHandler> notification;
+    Core::SinkType<USBMassStorageNotificationHandler> notification;
     uint32_t signalled = USBMassStorage_StateInvalid;
     Exchange::IUSBMassStorage::IUSBStorageMountInfoIterator* mountPoints = {};
     Thunder::Exchange::IUSBMassStorage::USBStoragePartitionInfo partitionInfo = {};
@@ -1043,7 +1043,7 @@ TEST_F(USBMassStorageTest, comrpc_open_failure)
 TEST_F(USBMassStorageTest, comrpc_event_default_failure)
 {
     uint32_t status = Core::ERROR_GENERAL;
-    Core::Sink<USBMassStorageNotificationHandler> notification;
+    Core::SinkType<USBMassStorageNotificationHandler> notification;
     uint32_t signalled = USBMassStorage_StateInvalid;
     Exchange::IUSBMassStorage::IUSBStorageDeviceInfoIterator* deviceInfo = nullptr;
 
@@ -1118,7 +1118,7 @@ TEST_F(USBMassStorageTest, comrpc_event_default_failure)
 TEST_F(USBMassStorageTest, comrpc_unmount_failure)
 {
         uint32_t status = Core::ERROR_GENERAL;
-    Core::Sink<USBMassStorageNotificationHandler> notification;
+    Core::SinkType<USBMassStorageNotificationHandler> notification;
     uint32_t signalled = USBMassStorage_StateInvalid;
     Exchange::IUSBMassStorage::IUSBStorageMountInfoIterator* mountPoints = {};
     Exchange::IUSBMassStorage::IUSBStorageDeviceInfoIterator* deviceInfo = nullptr;
@@ -1322,7 +1322,7 @@ TEST_F(USBMassStorageTest, comrpc_unmount_failure)
 TEST_F(USBMassStorageTest, comrpc_Multiple_getDeviceListAndMount_success)
 {
     uint32_t status = Core::ERROR_GENERAL;
-    Core::Sink<USBMassStorageNotificationHandler> notification;
+    Core::SinkType<USBMassStorageNotificationHandler> notification;
     uint32_t signalled = USBMassStorage_StateInvalid;
     Exchange::IUSBMassStorage::IUSBStorageMountInfoIterator* mountPoints = {};
     Exchange::IUSBMassStorage::IUSBStorageDeviceInfoIterator* deviceInfo = nullptr;

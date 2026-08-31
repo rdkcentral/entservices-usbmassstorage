@@ -97,7 +97,7 @@ namespace Plugin {
             PluginHost::IShell* _service{};
             uint32_t _connectionId{};
             Exchange::IUSBMassStorage* _usbMassStorage{};
-            Core::Sink<Notification> _usbStoragesNotification;
+            Core::SinkType<Notification> _usbStoragesNotification;
             Exchange::IConfiguration* configure{nullptr};
     };
 
