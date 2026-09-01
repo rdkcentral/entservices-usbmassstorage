@@ -94,6 +94,7 @@ jobs:
           GH_TOKEN: ${{ secrets.ORG_READ_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           OVERALL_STATUS="success"
+          FAILURE_REPORT="/tmp/failure_report_$$.md"  # accumulates per-repo failure details for the summary
 
           # Write Summary header directly — no passing through outputs
           echo "## L1/L2 Test Status Report — $(date -u +'%Y-%m-%d %H:%M UTC')" >> $GITHUB_STEP_SUMMARY
@@ -122,6 +123,8 @@ jobs:
             RUN_URL=$(echo "$RUN_JSON"  | jq -r '.workflow_runs[0].html_url        // empty')
             RUN_DATE=$(echo "$RUN_JSON" | jq -r '.workflow_runs[0].created_at      // empty')
             COMMIT=$(echo "$RUN_JSON"   | jq -r '.workflow_runs[0].head_commit.message // empty' | head -1)
+            HEAD_SHA=$(echo "$RUN_JSON" | jq -r '.workflow_runs[0].head_sha            // empty')
+            SHORT_SHA="${HEAD_SHA:0:7}"
 
             if [[ -z "$RUN_ID" || "$RUN_ID" == "null" ]]; then
               echo "  ⚠️  No runs found — skipping"
@@ -163,6 +166,36 @@ jobs:
                     | "    STEP " + (.number|tostring) + ": " + .name + " (" + .conclusion + ")"
                   )
               '
+
+              # Find last successful run to determine which commit(s) broke the tests
+              LAST_GOOD_SHA=$(gh api \
+                "repos/$REPO/actions/workflows/tests-trigger.yml/runs?per_page=1&branch=develop&status=completed&conclusion=success" \
+                --jq '.workflow_runs[0].head_sha // empty' 2>/dev/null)
+
+              if [[ -n "$LAST_GOOD_SHA" && "$LAST_GOOD_SHA" != "null" && "$LAST_GOOD_SHA" != "$HEAD_SHA" ]]; then
+                echo "  Last good SHA : $LAST_GOOD_SHA"
+                # Commits introduced between the last pass and the failing commit
+                BREAKING_COMMITS=$(gh api "repos/$REPO/compare/$LAST_GOOD_SHA...$HEAD_SHA" \
+                  --jq '[.commits[] | .sha[0:7] + "  " + (.commit.message | split("\n")[0])] | join("\n")' 2>/dev/null)
+                # PR(s) associated with the failing HEAD commit
+                PR_INFO=$(gh api "repos/$REPO/commits/$HEAD_SHA/pulls" \
+                  --jq 'if length > 0 then .[0] | "[#" + (.number|tostring) + "](" + .html_url + ") " + .title else "no associated PR" end' 2>/dev/null)
+              else
+                BREAKING_COMMITS="(no previous successful run found to compare against)"
+                PR_INFO="N/A"
+              fi
+              echo "  Breaking PR   : $PR_INFO"
+
+              {
+                echo "### [$REPO](https://github.com/$REPO)"
+                echo "- **Failing commit:** [$SHORT_SHA](https://github.com/$REPO/commit/$HEAD_SHA)"
+                echo "- **Associated PR:** $PR_INFO"
+                echo "- **Commits introduced since last passing run:**"
+                echo '```'
+                echo "$BREAKING_COMMITS"
+                echo '```'
+                echo ""
+              } >> "$FAILURE_REPORT"
             fi
 
             L1_ICON=$([[ "$L1" == "success" ]] && echo "Success✅" || echo "Failed❌")
@@ -184,7 +217,7 @@ jobs:
               FAILED_INLINE=$(echo "$ALL_JOBS" | jq -r '
                 .jobs[] | select(.conclusion != "success" and .conclusion != null) |
                 .name + " (" + .conclusion + ")"' 2>/dev/null | head -3 | tr '\n' ' | ')
-              STATUS_CELL="❌ Not passed: $FAILED_INLINE"
+              STATUS_CELL="❌ Not passed: $FAILED_INLINE | [$SHORT_SHA](https://github.com/$REPO/commit/$HEAD_SHA)"
             else
               STATUS_CELL="✅ All passed"
             fi
@@ -193,6 +226,15 @@ jobs:
             echo "| [$REPO](https://github.com/$REPO) | $L1_ICON | $L2_ICON | $COV_ICON $COV_CONCLUSION | $STATUS_CELL | $RUN_DATE | [View →]($RUN_URL) |" >> $GITHUB_STEP_SUMMARY
 
           done < <(echo "$REPOS" | awk 'NF && !seen[$0]++')
+
+          if [[ -s "$FAILURE_REPORT" ]]; then
+            echo ""                                                         >> $GITHUB_STEP_SUMMARY
+            echo "---"                                                      >> $GITHUB_STEP_SUMMARY
+            echo "## Failure Details"                                       >> $GITHUB_STEP_SUMMARY
+            echo ""                                                         >> $GITHUB_STEP_SUMMARY
+            cat "$FAILURE_REPORT"                                           >> $GITHUB_STEP_SUMMARY
+          fi
+          rm -f "$FAILURE_REPORT"
 
           echo ""                                                         >> $GITHUB_STEP_SUMMARY
           if [[ "$OVERALL_STATUS" == "failure" ]]; then
