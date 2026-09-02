@@ -73,7 +73,6 @@ jobs:
         rdkcentral/entservices-voicecontrol
         rdkcentral/entservices-xcast
         rdkcentral/entservices-telemetrymetrics
-        
 
     steps:
       # ── Step 0: Skip if PR was closed WITHOUT merging ──────────
