@@ -58,6 +58,13 @@ cd "$GITHUB_WORKSPACE"
 git clone --branch 1.0.12 https://github.com/rdkcentral/entservices-testframework.git
 
 ############################
+# Fix mock method signatures (compatibility with WPEFramework interfaces)
+echo "Applying mock compatibility patch to testframework"
+cd entservices-testframework
+patch -p1 < $GITHUB_WORKSPACE/fix-mock-addref.patch || echo "Patch already applied or failed, continuing..."
+cd ..
+
+############################
 # Build Thunder-Tools
 echo "======================================================================================"
 echo "buliding thunderTools"
