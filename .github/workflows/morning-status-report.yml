@@ -1,0 +1,246 @@
+name: Morning L1/L2 Status Report
+
+on:
+  workflow_dispatch:   # manual trigger for testing anytime
+  push:
+    branches:
+      - feature/AI_POC_workflow_monitoring  # remove this line after merging to main
+  pull_request:
+    types: [closed]    # fires when any PR is closed; step below filters merged-only
+    branches:
+      - develop        # only PRs targeting develop branch (default branch)
+  schedule:
+    - cron: '*/10 * * * *'   # every 10 min for testing → change to '0 8 * * *' for daily 8AM
+
+jobs:
+  l1-l2-status:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+
+    env:
+      REPOS: |
+        rdkcentral/entservices-usbmassstorage
+        rdkcentral/entservices-usbdevice
+        rdkcentral/entservices-telemetry
+        rdkcentral/entservices-systemservices
+        rdkcentral/entservices-avinput
+        rdkcentral/entservices-hdcpprofile
+        rdkcentral/entservices-hdmicecsource
+        rdkcentral/entservices-hdmicecsink
+        rdkcentral/entservices-devicediagnostics
+        rdkcentral/entservices-deviceinfo
+        rdkcentral/entservices-displayinfo
+        rdkcentral/entservices-displaysettings
+        rdkcentral/entservices-framerate
+        rdkcentral/entservices-powermanager
+        rdkcentral/entservices-systemmode
+        rdkcentral/entservices-userpreferences
+        rdkcentral/entservices-warehouse
+        rdkcentral/entservices-migration
+        rdkcentral/entservices-ocicontainer
+        rdkcentral/entservices-usersettings
+        rdkcentral/entservices-account
+        rdkcentral/entservices-backupmanager
+        rdkcentral/entservices-casting
+        rdkcentral/entservices-cloudstore
+        rdkcentral/entservices-connectivity
+        rdkcentral/entservices-cryptography
+        rdkcentral/entservices-firmwaredownload
+        rdkcentral/entservices-firmwareupdate
+        rdkcentral/entservices-frontpanel
+        rdkcentral/entservices-helpers
+        rdkcentral/entservices-ledcontrol
+        rdkcentral/entservices-linearplaybackcontrol
+        rdkcentral/entservices-maintenancemanager
+        rdkcentral/entservices-mediaanddrm
+        rdkcentral/entservices-messagecontrol
+        rdkcentral/entservices-miracast
+        rdkcentral/entservices-monitor
+        rdkcentral/entservices-motiondetection
+        rdkcentral/entservices-nativejs
+        rdkcentral/entservices-opencdmi
+        rdkcentral/entservices-peripherals
+        rdkcentral/entservices-persistentstore
+        rdkcentral/entservices-playerinfo
+        rdkcentral/entservices-remotecontrol
+        rdkcentral/entservices-resourcemanager
+        rdkcentral/entservices-runtime
+        rdkcentral/entservices-screencapture
+        rdkcentral/entservices-sharedstorage
+        rdkcentral/entservices-systemaudioplayer
+        rdkcentral/entservices-texttospeech
+        rdkcentral/entservices-voicecontrol
+        rdkcentral/entservices-xcast
+        rdkcentral/entservices-telemetrymetrics
+  
+
+    steps:
+      # ── Step 0: Skip if PR was closed WITHOUT merging ──────────
+      - name: Check if PR was actually merged
+        if: github.event_name == 'pull_request'
+        run: |
+          if [[ "${{ github.event.pull_request.merged }}" != "true" ]]; then
+            echo "PR was closed but NOT merged — skipping report."
+            exit 0
+          fi
+          echo "PR #${{ github.event.pull_request.number }} merged → proceeding."
+
+      # ── Step 1: Loop through all repos, collect results ────────
+      - name: Collect L1/L2 results from all repos
+        if: github.event_name != 'pull_request' || github.event.pull_request.merged == true
+        env:
+          # GITHUB_TOKEN only covers this repo; ORG_READ_TOKEN needs actions:read on all rdkcentral/* repos
+          GH_TOKEN: ${{ secrets.ORG_READ_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          OVERALL_STATUS="success"
+          FAILURE_REPORT="/tmp/failure_report_$$.md"  # accumulates per-repo failure details for the summary
+
+          # Write Summary header directly — no passing through outputs
+          echo "## L1/L2 Test Status Report — $(date -u +'%Y-%m-%d %H:%M UTC')" >> $GITHUB_STEP_SUMMARY
+          echo ""                                                                 >> $GITHUB_STEP_SUMMARY
+          echo "| Repository | L1 | L2 | Coverity | Status | Last Run | Link |"            >> $GITHUB_STEP_SUMMARY
+          echo "|------------|----|----|----------|--------|----------|------|"             >> $GITHUB_STEP_SUMMARY
+
+          while IFS= read -r REPO; do
+            [[ -z "$REPO" ]] && continue
+
+            echo "──────────────────────────────────────"
+            echo "Processing: $REPO"
+
+            # status=completed ensures we never read a null conclusion from an in-progress run
+            API="repos/$REPO/actions/workflows/tests-trigger.yml/runs?per_page=1&branch=develop&status=completed"
+
+            # Single call — gh api exits non-zero on 404/errors, avoids double round-trip
+            if ! RUN_JSON=$(gh api "$API" 2>/dev/null); then
+              echo "  ⚠️  tests-trigger.yml not found or inaccessible in $REPO — skipping"
+              echo "| [$REPO](https://github.com/$REPO) | ⚠️ | ⚠️ | ⚠️ | workflow not found | N/A | N/A |" >> $GITHUB_STEP_SUMMARY
+              continue
+            fi
+
+            # Parse each field separately — commit messages can contain '|' and corrupt delimited parsing
+            RUN_ID=$(echo "$RUN_JSON"   | jq -r '.workflow_runs[0].id              // empty')
+            RUN_URL=$(echo "$RUN_JSON"  | jq -r '.workflow_runs[0].html_url        // empty')
+            RUN_DATE=$(echo "$RUN_JSON" | jq -r '.workflow_runs[0].created_at      // empty')
+            COMMIT=$(echo "$RUN_JSON"   | jq -r '.workflow_runs[0].head_commit.message // empty' | head -1)
+            HEAD_SHA=$(echo "$RUN_JSON" | jq -r '.workflow_runs[0].head_sha            // empty')
+            SHORT_SHA="${HEAD_SHA:0:7}"
+
+            if [[ -z "$RUN_ID" || "$RUN_ID" == "null" ]]; then
+              echo "  ⚠️  No runs found — skipping"
+              echo "| [$REPO](https://github.com/$REPO) | ⚠️ | ⚠️ | ⚠️ | no runs on develop | N/A | N/A |" >> $GITHUB_STEP_SUMMARY
+              continue
+            fi
+
+            echo "  Run ID : $RUN_ID  Date: $RUN_DATE"
+            echo "  Commit : $COMMIT"
+
+            ALL_JOBS=$(gh api "repos/$REPO/actions/runs/$RUN_ID/jobs?per_page=100" 2>/dev/null)
+
+            L1=$(echo "$ALL_JOBS" | jq -r '.jobs[] | select(.name | test("L1|unit test";"i")) | .conclusion' | head -1)
+            L2=$(echo "$ALL_JOBS" | jq -r '.jobs[] | select(.name | test("L2";"i")) | .conclusion' | head -1)
+
+            if [[ -z "$L1" || "$L1" == "null" ]]; then
+              L1=$(gh api "repos/$REPO/actions/runs/$RUN_ID" --jq '.conclusion // empty' 2>/dev/null)
+              echo "  L1 job not matched by name — using overall run conclusion"
+            fi
+            # N/A when no L2 job exists — avoids showing a false inherited status from L1
+            if [[ -z "$L2" || "$L2" == "null" ]]; then
+              L2="N/A"
+            fi
+
+            echo "  L1=$L1  L2=$L2"
+            # Treat any non-success conclusion as failure; N/A (no job found) is not a failure
+            if [[ "$L1" != "success" || ("$L2" != "success" && "$L2" != "N/A") ]]; then
+              echo "  ⚠️  NON-SUCCESS in $REPO (L1=$L1, L2=$L2) — marking overall as failed"
+              OVERALL_STATUS="failure"
+              echo ""
+              echo "Non-success Job Details:"
+              echo "$ALL_JOBS" | jq -r '
+                .jobs[]
+                | select(.conclusion != "success" and .conclusion != null)
+                | "  JOB: " + .name + " (" + .conclusion + ")",
+                  (
+                    (.steps // [])[]
+                    | select(.conclusion != "success" and .conclusion != null)
+                    | "    STEP " + (.number|tostring) + ": " + .name + " (" + .conclusion + ")"
+                  )
+              '
+
+              # Find last successful run to determine which commit(s) broke the tests
+              LAST_GOOD_SHA=$(gh api \
+                "repos/$REPO/actions/workflows/tests-trigger.yml/runs?per_page=1&branch=develop&status=completed&conclusion=success" \
+                --jq '.workflow_runs[0].head_sha // empty' 2>/dev/null)
+
+              if [[ -n "$LAST_GOOD_SHA" && "$LAST_GOOD_SHA" != "null" && "$LAST_GOOD_SHA" != "$HEAD_SHA" ]]; then
+                echo "  Last good SHA : $LAST_GOOD_SHA"
+                # Commits introduced between the last pass and the failing commit
+                BREAKING_COMMITS=$(gh api "repos/$REPO/compare/$LAST_GOOD_SHA...$HEAD_SHA" \
+                  --jq '[.commits[] | .sha[0:7] + "  " + (.commit.message | split("\n")[0])] | join("\n")' 2>/dev/null)
+                # PR(s) associated with the failing HEAD commit
+                PR_INFO=$(gh api "repos/$REPO/commits/$HEAD_SHA/pulls" \
+                  --jq 'if length > 0 then .[0] | "[#" + (.number|tostring) + "](" + .html_url + ") " + .title else "no associated PR" end' 2>/dev/null)
+              else
+                BREAKING_COMMITS="(no previous successful run found to compare against)"
+                PR_INFO="N/A"
+              fi
+              echo "  Breaking PR   : $PR_INFO"
+
+              {
+                echo "### [$REPO](https://github.com/$REPO)"
+                echo "- **Failing commit:** [$SHORT_SHA](https://github.com/$REPO/commit/$HEAD_SHA)"
+                echo "- **Associated PR:** $PR_INFO"
+                echo "- **Commits introduced since last passing run:**"
+                echo '```'
+                echo "$BREAKING_COMMITS"
+                echo '```'
+                echo ""
+              } >> "$FAILURE_REPORT"
+            fi
+
+            L1_ICON=$([[ "$L1" == "success" ]] && echo "Success✅" || echo "Failed❌")
+            L2_ICON=$([[ "$L2" == "success" ]] && echo "Success✅" || ([[ "$L2" == "N/A" ]] && echo "N/A" || echo "Failed❌"))
+
+            # ── Coverity: query native_full_build.yml ────────────
+            COV_API="repos/$REPO/actions/workflows/native_full_build.yml/runs?per_page=1&branch=develop&event=push&status=completed"
+            if ! COV_JSON=$(gh api "$COV_API" 2>/dev/null); then
+              COV_CONCLUSION="N/A"
+            else
+              COV_CONCLUSION=$(echo "$COV_JSON" | jq -r '.workflow_runs[0].conclusion // empty')
+              [[ -z "$COV_CONCLUSION" || "$COV_CONCLUSION" == "null" ]] && COV_CONCLUSION="no data"
+            fi
+            COV_ICON=$([[ "$COV_CONCLUSION" == "success" ]] && echo "✅" || ([[ "$COV_CONCLUSION" == "failure" ]] && echo "❌" || echo "⚠️"))
+            [[ "$COV_CONCLUSION" == "failure" ]] && OVERALL_STATUS="failure"
+
+            # Consistent with icons: any non-success conclusion is a failure; N/A means no job was found
+            if [[ "$L1" != "success" || ("$L2" != "success" && "$L2" != "N/A") ]]; then
+              FAILED_INLINE=$(echo "$ALL_JOBS" | jq -r '
+                .jobs[] | select(.conclusion != "success" and .conclusion != null) |
+                .name + " (" + .conclusion + ")"' 2>/dev/null | head -3 | tr '\n' ' | ')
+              STATUS_CELL="❌ Not passed: $FAILED_INLINE | [$SHORT_SHA](https://github.com/$REPO/commit/$HEAD_SHA)"
+            else
+              STATUS_CELL="✅ All passed"
+            fi
+
+            # Write single table row — repo link → repo home, Link → run
+            echo "| [$REPO](https://github.com/$REPO) | $L1_ICON | $L2_ICON | $COV_ICON $COV_CONCLUSION | $STATUS_CELL | $RUN_DATE | [View →]($RUN_URL) |" >> $GITHUB_STEP_SUMMARY
+
+          done < <(echo "$REPOS" | awk 'NF && !seen[$0]++')
+
+          if [[ -s "$FAILURE_REPORT" ]]; then
+            echo ""                                                         >> $GITHUB_STEP_SUMMARY
+            echo "---"                                                      >> $GITHUB_STEP_SUMMARY
+            echo "## Failure Details"                                       >> $GITHUB_STEP_SUMMARY
+            echo ""                                                         >> $GITHUB_STEP_SUMMARY
+            cat "$FAILURE_REPORT"                                           >> $GITHUB_STEP_SUMMARY
+          fi
+          rm -f "$FAILURE_REPORT"
+
+          echo ""                                                         >> $GITHUB_STEP_SUMMARY
+          if [[ "$OVERALL_STATUS" == "failure" ]]; then
+            echo "**Overall: ❌ One or more test suites FAILED**"        >> $GITHUB_STEP_SUMMARY
+            echo "❌ One or more test suites FAILED"
+          else
+            echo "**Overall: ✅ All test suites passed**"                >> $GITHUB_STEP_SUMMARY
+            echo "✅ All test suites passed"
+          fi
