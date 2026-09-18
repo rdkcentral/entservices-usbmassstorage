@@ -209,6 +209,13 @@ namespace Plugin {
                 partitions.push_back(std::move(partition));
             }
         }
+        if (partitions.empty())
+        {
+            // /proc/partitions may be unavailable or may not contain an entry for a newly
+            // discovered device yet. The device itself can still contain a mountable filesystem.
+            LOGINFO("No partitions found for device path [%s], trying the device directly", storageDeviceInfo.devicePath.c_str());
+            partitions.push_back(storageDeviceInfo.devicePath);
+        }
         num_partitions = partitions.size();
         LOGINFO("Device path[%s] Device Name[%s] num_partitions [%zd]",storageDeviceInfo.devicePath.c_str(),storageDeviceInfo.deviceName.c_str(),num_partitions-1);
 
@@ -241,12 +248,14 @@ namespace Plugin {
             LOGINFO("MountPoint [%s]", mountPoint.c_str());
             if (mkdir(mountPoint.c_str(), 0755) == 0)
             {
-                if ((mount(partition.c_str(), mountPoint.c_str(), FILE_SYSTEM_VFAT, 0, nullptr)) == 0)
+                // Restrict mounted USB filesystems while preserving the API's READ_WRITE mount mode.
+                const unsigned long systemMountFlags = MS_NOSUID | MS_NODEV | MS_NOEXEC;
+                if ((mount(partition.c_str(), mountPoint.c_str(), FILE_SYSTEM_VFAT, systemMountFlags, nullptr)) == 0)
                 {
                     mountInfo.fileSystem = VFAT;
                     LOGINFO("filetype is vfat");
                 }
-                else if ((mount(partition.c_str(), mountPoint.c_str(), FILE_SYSTEM_EXFAT, 0, nullptr)) == 0)
+                else if ((mount(partition.c_str(), mountPoint.c_str(), FILE_SYSTEM_EXFAT, systemMountFlags, nullptr)) == 0)
                 {
                     LOGINFO("filetype is exfat");
                     mountInfo.fileSystem = EXFAT;
