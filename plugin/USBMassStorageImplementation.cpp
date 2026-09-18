@@ -23,6 +23,7 @@
 #include <iomanip>
 
 #include <sys/prctl.h>
+#include <sys/mount.h>
 #include <mutex>
 #include <thread>
 #include <fstream>
@@ -241,12 +242,14 @@ namespace Plugin {
             LOGINFO("MountPoint [%s]", mountPoint.c_str());
             if (mkdir(mountPoint.c_str(), 0755) == 0)
             {
-                if ((mount(partition.c_str(), mountPoint.c_str(), FILE_SYSTEM_VFAT, 0, nullptr)) == 0)
+                // Add MS_NOSUID | MS_NODEV | MS_NOEXEC flags for security (RDKEMW-24505, RDKEMW-24517)
+                unsigned long mountFlags = MS_NOSUID | MS_NODEV | MS_NOEXEC;
+                if ((mount(partition.c_str(), mountPoint.c_str(), FILE_SYSTEM_VFAT, mountFlags, nullptr)) == 0)
                 {
                     mountInfo.fileSystem = VFAT;
                     LOGINFO("filetype is vfat");
                 }
-                else if ((mount(partition.c_str(), mountPoint.c_str(), FILE_SYSTEM_EXFAT, 0, nullptr)) == 0)
+                else if ((mount(partition.c_str(), mountPoint.c_str(), FILE_SYSTEM_EXFAT, mountFlags, nullptr)) == 0)
                 {
                     LOGINFO("filetype is exfat");
                     mountInfo.fileSystem = EXFAT;
