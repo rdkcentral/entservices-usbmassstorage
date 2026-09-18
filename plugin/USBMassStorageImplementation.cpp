@@ -209,6 +209,13 @@ namespace Plugin {
                 partitions.push_back(std::move(partition));
             }
         }
+        if (partitions.empty())
+        {
+            // /proc/partitions may be unavailable or may not contain an entry for a newly
+            // discovered device yet. The device itself can still contain a mountable filesystem.
+            LOGINFO("No partitions found for device path [%s], trying the device directly", storageDeviceInfo.devicePath.c_str());
+            partitions.push_back(storageDeviceInfo.devicePath);
+        }
         num_partitions = partitions.size();
         LOGINFO("Device path[%s] Device Name[%s] num_partitions [%zd]",storageDeviceInfo.devicePath.c_str(),storageDeviceInfo.deviceName.c_str(),num_partitions-1);
 
