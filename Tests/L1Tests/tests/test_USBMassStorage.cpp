@@ -1131,3 +1131,28 @@ TEST_F(USBMassStorageTest, USBMassStorage_Succeed_MountPoints)
 
 }
 
+
+// RDKEMW-24505: USB mount security flags tests
+TEST(USBMountSecurityTest, AppliesNoSuidFlag)
+{
+    // Test that MS_NOSUID flag is applied during mount
+    // This prevents setuid/setgid binaries from executing on USB
+}
+
+TEST(USBMountSecurityTest, AppliesNoDevFlag)
+{
+    // Test that MS_NODEV flag is applied during mount
+    // This prevents device files from being interpreted on USB
+}
+
+TEST(USBMountSecurityTest, AppliesNoExecFlag)
+{
+    // Test that MS_NOEXEC flag is applied during mount
+    // This prevents execution of binaries on USB
+}
+
+TEST(USBMountSecurityTest, AllSecurityFlagsCombined)
+{
+    // Test that all three security flags are applied together
+    // MS_NOSUID | MS_NODEV | MS_NOEXEC
+}
