@@ -37,6 +37,11 @@
 
 using namespace std;
 
+unsigned long secureUsbMountFlags()
+{
+    return MS_NOSUID | MS_NODEV | MS_NOEXEC;
+}
+
 namespace WPEFramework {
 namespace Plugin {
 
@@ -249,7 +254,7 @@ namespace Plugin {
             if (mkdir(mountPoint.c_str(), 0755) == 0)
             {
                 // Restrict mounted USB filesystems while preserving the API's READ_WRITE mount mode.
-                const unsigned long systemMountFlags = MS_NOSUID | MS_NODEV | MS_NOEXEC;
+                const unsigned long systemMountFlags = secureUsbMountFlags();
                 if ((mount(partition.c_str(), mountPoint.c_str(), FILE_SYSTEM_VFAT, systemMountFlags, nullptr)) == 0)
                 {
                     mountInfo.fileSystem = VFAT;
