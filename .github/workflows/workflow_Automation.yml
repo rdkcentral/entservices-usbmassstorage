@@ -1,6 +1,7 @@
 name: Entservices L1 L2 Coverity Status
 
 on:
+  push:
   workflow_dispatch:
   schedule:
     - cron: '0 8 * * *'   # 8:00 AM UTC
@@ -75,10 +76,12 @@ jobs:
       - name: Collect L1 L2 Coverity Status
         run: |
 
-          echo "## Entservices L1/L2/Coverity Status"
-          echo ""
-          echo "| Repository | L1 | L2 | Coverity | Last Run | Link |"
-          echo "|------------|----|----|----------|----------|------|"
+          SUMMARY_FILE="$GITHUB_STEP_SUMMARY"
+
+          echo "## Entservices L1/L2/Coverity Status" >> "$SUMMARY_FILE"
+          echo "" >> "$SUMMARY_FILE"
+          echo "| Repository | L1 | L2 | Coverity | Last Run | Link |" >> "$SUMMARY_FILE"
+          echo "|------------|----|----|----------|----------|------|" >> "$SUMMARY_FILE"
 
           while IFS= read -r REPO; do
 
@@ -99,7 +102,7 @@ jobs:
             RUN_DATE=$(echo "$RUN_JSON" | jq -r '.workflow_runs[0].created_at // empty')
 
             if [[ -z "$RUN_ID" ]]; then
-              echo "| $REPO | N/A | N/A | N/A | N/A | N/A |"
+              echo "| $REPO | N/A | N/A | N/A | N/A | N/A |" >> "$SUMMARY_FILE"
               continue
             fi
 
@@ -153,6 +156,6 @@ jobs:
                 ;;
             esac
 
-            echo "| [$REPO](https://github.com/$REPO) | $L1 | $L2 | $COVERITY | $RUN_DATE | [View](https://github.com/$REPO/actions/runs/$RUN_ID) |"
+            echo "| [$REPO](https://github.com/$REPO) | $L1 | $L2 | $COVERITY | $RUN_DATE | [View](https://github.com/$REPO/actions/runs/$RUN_ID) |" >> "$SUMMARY_FILE"
 
           done <<< "$REPOS"
