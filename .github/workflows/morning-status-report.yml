@@ -74,7 +74,6 @@ jobs:
         rdkcentral/entservices-xcast
         rdkcentral/entservices-telemetrymetrics
 
-
     steps:
       # ── Step 0: Skip if PR was closed WITHOUT merging ──────────
       - name: Check if PR was actually merged
