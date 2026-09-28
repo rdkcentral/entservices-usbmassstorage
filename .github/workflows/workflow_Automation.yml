@@ -80,8 +80,8 @@ jobs:
 
           echo "## Entservices L1/L2/Coverity Status" >> "$SUMMARY_FILE"
           echo "" >> "$SUMMARY_FILE"
-          echo "| Repository | L1 | L2 | Coverity | Last Run | Link |" >> "$SUMMARY_FILE"
-          echo "|------------|----|----|----------|----------|------|" >> "$SUMMARY_FILE"
+          echo "| Repository | L1 | L2 | Coverity | Status | Failed Step | Last Run | Link |" >> "$SUMMARY_FILE"
+          echo "|------------|----|----|----------|--------|--------------|----------|------|" >> "$SUMMARY_FILE"
 
           while IFS= read -r REPO; do
 
@@ -98,11 +98,10 @@ jobs:
               2>/dev/null || echo '{}')
 
             RUN_ID=$(echo "$RUN_JSON" | jq -r '.workflow_runs[0].id // empty')
-            RUN_URL=$(echo "$RUN_JSON" | jq -r '.workflow_runs[0].html_url // empty')
             RUN_DATE=$(echo "$RUN_JSON" | jq -r '.workflow_runs[0].created_at // empty')
 
             if [[ -z "$RUN_ID" ]]; then
-              echo "| $REPO | N/A | N/A | N/A | N/A | N/A |" >> "$SUMMARY_FILE"
+              echo "| $REPO | N/A | N/A | N/A | ⚠️ N/A | Unable to read L1/L2 workflow | N/A | N/A |" >> "$SUMMARY_FILE"
               continue
             fi
 
@@ -125,6 +124,13 @@ jobs:
                 | select(.name | test("L2"; "i"))
                 | .conclusion][0] // "N/A"')
 
+            FAILED_STEPS=$(echo "$JOBS" | jq -r '[.jobs[]
+              | select(.conclusion == "failure")
+              | (.name + ": " + (([(.steps // [])[]
+                | select(.conclusion == "failure") | .name]
+                | if length == 0 then "job failed" else join(", ") end)))]
+              | join("<br>")')
+
             # --------------------------------------------------
             # Coverity
             # --------------------------------------------------
@@ -136,26 +142,52 @@ jobs:
             COVERITY=$(echo "$COV_JSON" |
               jq -r '.workflow_runs[0].conclusion // "N/A"')
 
+            if [[ -z "$FAILED_STEPS" ]]; then
+              FAILED_STEPS=""
+            fi
+
+            if [[ "$COVERITY" == "failure" ]]; then
+              FAILED_STEPS="${FAILED_STEPS:+$FAILED_STEPS<br>}Coverity"
+            fi
+
+            if [[ "$L1" == "failure" || "$L2" == "failure" || "$COVERITY" == "failure" ]]; then
+              STATUS="❌ Failed"
+            elif [[ "$L1" == "success" && "$L2" == "success" && "$COVERITY" == "success" ]]; then
+              STATUS="✅ Success"
+            else
+              STATUS="⚠️ N/A"
+            fi
+
+            [[ -z "$FAILED_STEPS" ]] && FAILED_STEPS="-"
+
             # --------------------------------------------------
             # Convert status to simple display
             # --------------------------------------------------
 
-            [[ "$L1" == "success" ]] && L1="PASS" || L1="FAIL"
-            [[ "$L2" == "success" ]] && L2="PASS" || \
-              [[ "$L2" == "N/A" ]] || L2="FAIL"
+            case "$L1" in
+              success) L1="✅" ;;
+              failure) L1="❌" ;;
+              *) L1="-" ;;
+            esac
+
+            case "$L2" in
+              success) L2="✅" ;;
+              failure) L2="❌" ;;
+              *) L2="-" ;;
+            esac
 
             case "$COVERITY" in
               success)
-                COVERITY="PASS"
+                COVERITY="✅"
                 ;;
               failure)
-                COVERITY="FAIL"
+                COVERITY="❌"
                 ;;
               *)
-                COVERITY="N/A"
+                COVERITY="-"
                 ;;
             esac
 
-            echo "| [$REPO](https://github.com/$REPO) | $L1 | $L2 | $COVERITY | $RUN_DATE | [View](https://github.com/$REPO/actions/runs/$RUN_ID) |" >> "$SUMMARY_FILE"
+            echo "| [$REPO](https://github.com/$REPO) | $L1 | $L2 | $COVERITY | $STATUS | $FAILED_STEPS | $RUN_DATE | [View](https://github.com/$REPO/actions/runs/$RUN_ID) |" >> "$SUMMARY_FILE"
 
           done <<< "$REPOS"
