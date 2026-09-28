@@ -73,6 +73,9 @@ jobs:
         rdkcentral/entservices-voicecontrol
         rdkcentral/entservices-xcast
         rdkcentral/entservices-telemetrymetrics
+        entservices-authservice 
+        entservices-deviceprovisioning
+        entservices-contentprotection
 
     steps:
       # ── Step 0: Skip if PR was closed WITHOUT merging ──────────
