@@ -1,0 +1,158 @@
+name: Entservices L1 L2 Coverity Status
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 8 * * *'   # 8:00 AM UTC
+
+jobs:
+  status-report:
+    runs-on: ubuntu-latest
+
+    permissions:
+      actions: read
+
+    env:
+      GH_TOKEN: ${{ secrets.ORG_READ_TOKEN || secrets.GITHUB_TOKEN }}
+
+      REPOS: |
+        rdkcentral/entservices-usbmassstorage
+        rdkcentral/entservices-usbdevice
+        rdkcentral/entservices-telemetry
+        rdkcentral/entservices-systemservices
+        rdkcentral/entservices-avinput
+        rdkcentral/entservices-hdcpprofile
+        rdkcentral/entservices-hdmicecsource
+        rdkcentral/entservices-hdmicecsink
+        rdkcentral/entservices-devicediagnostics
+        rdkcentral/entservices-deviceinfo
+        rdkcentral/entservices-displayinfo
+        rdkcentral/entservices-displaysettings
+        rdkcentral/entservices-framerate
+        rdkcentral/entservices-powermanager
+        rdkcentral/entservices-systemmode
+        rdkcentral/entservices-userpreferences
+        rdkcentral/entservices-warehouse
+        rdkcentral/entservices-migration
+        rdkcentral/entservices-ocicontainer
+        rdkcentral/entservices-usersettings
+        rdkcentral/entservices-account
+        rdkcentral/entservices-backupmanager
+        rdkcentral/entservices-casting
+        rdkcentral/entservices-cloudstore
+        rdkcentral/entservices-connectivity
+        rdkcentral/entservices-cryptography
+        rdkcentral/entservices-firmwaredownload
+        rdkcentral/entservices-firmwareupdate
+        rdkcentral/entservices-frontpanel
+        rdkcentral/entservices-helpers
+        rdkcentral/entservices-ledcontrol
+        rdkcentral/entservices-linearplaybackcontrol
+        rdkcentral/entservices-maintenancemanager
+        rdkcentral/entservices-mediaanddrm
+        rdkcentral/entservices-messagecontrol
+        rdkcentral/entservices-miracast
+        rdkcentral/entservices-monitor
+        rdkcentral/entservices-motiondetection
+        rdkcentral/entservices-nativejs
+        rdkcentral/entservices-opencdmi
+        rdkcentral/entservices-peripherals
+        rdkcentral/entservices-persistentstore
+        rdkcentral/entservices-playerinfo
+        rdkcentral/entservices-remotecontrol
+        rdkcentral/entservices-resourcemanager
+        rdkcentral/entservices-runtime
+        rdkcentral/entservices-screencapture
+        rdkcentral/entservices-sharedstorage
+        rdkcentral/entservices-systemaudioplayer
+        rdkcentral/entservices-texttospeech
+        rdkcentral/entservices-voicecontrol
+        rdkcentral/entservices-xcast
+        rdkcentral/entservices-telemetrymetrics
+
+    steps:
+
+      - name: Collect L1 L2 Coverity Status
+        run: |
+
+          echo "## Entservices L1/L2/Coverity Status"
+          echo ""
+          echo "| Repository | L1 | L2 | Coverity | Last Run | Link |"
+          echo "|------------|----|----|----------|----------|------|"
+
+          while IFS= read -r REPO; do
+
+            [[ -z "$REPO" ]] && continue
+
+            echo "Checking $REPO"
+
+            # --------------------------------------------------
+            # Get latest completed L1/L2 workflow
+            # --------------------------------------------------
+
+            RUN_JSON=$(gh api \
+              "repos/$REPO/actions/workflows/tests-trigger.yml/runs?branch=develop&status=completed&per_page=1" \
+              2>/dev/null || echo '{}')
+
+            RUN_ID=$(echo "$RUN_JSON" | jq -r '.workflow_runs[0].id // empty')
+            RUN_URL=$(echo "$RUN_JSON" | jq -r '.workflow_runs[0].html_url // empty')
+            RUN_DATE=$(echo "$RUN_JSON" | jq -r '.workflow_runs[0].created_at // empty')
+
+            if [[ -z "$RUN_ID" ]]; then
+              echo "| $REPO | N/A | N/A | N/A | N/A | N/A |"
+              continue
+            fi
+
+            # --------------------------------------------------
+            # Get jobs
+            # --------------------------------------------------
+
+            JOBS=$(gh api \
+              "repos/$REPO/actions/runs/$RUN_ID/jobs?per_page=100" \
+              2>/dev/null || echo '{}')
+
+            # Change these patterns if actual job names differ
+            L1=$(echo "$JOBS" |
+              jq -r '[.jobs[]
+                | select(.name | test("L1"; "i"))
+                | .conclusion][0] // "N/A"')
+
+            L2=$(echo "$JOBS" |
+              jq -r '[.jobs[]
+                | select(.name | test("L2"; "i"))
+                | .conclusion][0] // "N/A"')
+
+            # --------------------------------------------------
+            # Coverity
+            # --------------------------------------------------
+
+            COV_JSON=$(gh api \
+              "repos/$REPO/actions/workflows/native_full_build.yml/runs?branch=develop&status=completed&per_page=1" \
+              2>/dev/null || echo '{}')
+
+            COVERITY=$(echo "$COV_JSON" |
+              jq -r '.workflow_runs[0].conclusion // "N/A"')
+
+            # --------------------------------------------------
+            # Convert status to simple display
+            # --------------------------------------------------
+
+            [[ "$L1" == "success" ]] && L1="PASS" || L1="FAIL"
+            [[ "$L2" == "success" ]] && L2="PASS" || \
+              [[ "$L2" == "N/A" ]] || L2="FAIL"
+
+            case "$COVERITY" in
+              success)
+                COVERITY="PASS"
+                ;;
+              failure)
+                COVERITY="FAIL"
+                ;;
+              *)
+                COVERITY="N/A"
+                ;;
+            esac
+
+            echo "| [$REPO](https://github.com/$REPO) | $L1 | $L2 | $COVERITY | $RUN_DATE | [View](https://github.com/$REPO/actions/runs/$RUN_ID) |"
+
+          done <<< "$REPOS"
