@@ -58,7 +58,6 @@ jobs:
         rdkcentral/entservices-miracast
         rdkcentral/entservices-monitor
         rdkcentral/entservices-motiondetection
-        rdkcentral/entservices-nativejs
         rdkcentral/entservices-opencdmi
         rdkcentral/entservices-peripherals
         rdkcentral/entservices-persistentstore
@@ -68,7 +67,6 @@ jobs:
         rdkcentral/entservices-runtime
         rdkcentral/entservices-screencapture
         rdkcentral/entservices-sharedstorage
-        rdkcentral/entservices-systemaudioplayer
         rdkcentral/entservices-texttospeech
         rdkcentral/entservices-voicecontrol
         rdkcentral/entservices-xcast
