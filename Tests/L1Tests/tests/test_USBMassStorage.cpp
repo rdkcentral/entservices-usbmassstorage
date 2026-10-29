@@ -1164,3 +1164,71 @@ TEST(USBMountSecurityTest, AllSecurityFlagsCombined)
     // MS_NOSUID | MS_NODEV | MS_NOEXEC
     EXPECT_EQ(static_cast<unsigned long>(MS_NOSUID | MS_NODEV | MS_NOEXEC), secureUsbMountFlags());
 }
+
+TEST_F(USBMassStorageTest, getMountPoints_UsesDevicePathWhenNoPartitionsFound)
+{
+    const std::string fallbackDevicePath = "/dev/rdk_l1_no_partition_device";
+
+    std::list<Exchange::IUSBDevice::USBDevice> usbDeviceList;
+    Exchange::IUSBDevice::USBDevice usbDevice;
+    usbDevice.deviceClass = LIBUSB_CLASS_MASS_STORAGE;
+    usbDevice.deviceSubclass = 0x12;
+    usbDevice.deviceName = "001/002";
+    usbDevice.devicePath = fallbackDevicePath;
+    usbDeviceList.emplace_back(usbDevice);
+
+    auto mockIterator =
+        Core::Service<RPC::IteratorType<Exchange::IUSBDevice::IUSBDeviceIterator>>
+            ::Create<Exchange::IUSBDevice::IUSBDeviceIterator>(usbDeviceList);
+
+    EXPECT_CALL(*p_usbDeviceMock, GetDeviceList(testing::_))
+        .WillOnce([&](Exchange::IUSBDevice::IUSBDeviceIterator*& devices) {
+            devices = mockIterator;
+            return Core::ERROR_NONE;
+        });
+
+    ASSERT_EQ(Core::ERROR_NONE,
+              handler.Invoke(connection, _T("getDeviceList"), _T("{}"), response));
+
+    EXPECT_CALL(*p_wrapsImplMock, stat(testing::_, testing::_))
+        .WillRepeatedly([&](const std::string& path, struct stat* info) {
+            if (path == fallbackDevicePath) {
+                info->st_mode = S_IFBLK;
+                return 0;
+            }
+
+            if (path == "/tmp/media/usb1") {
+                return -1; // Make the first mount-point directory available.
+            }
+
+            info->st_mode = S_IFDIR;
+            return 0;
+        });
+
+    EXPECT_CALL(*p_wrapsImplMock, mkdir(testing::_, testing::_))
+        .WillRepeatedly([](const char*, mode_t) {
+            return 0;
+        });
+
+    EXPECT_CALL(*p_wrapsImplMock, umount(testing::_))
+        .WillRepeatedly([](const char*) {
+            return 0;
+        });
+
+    EXPECT_CALL(*p_wrapsImplMock,
+                mount(testing::_, testing::_, testing::_, testing::_, testing::_))
+        .Times(1)
+        .WillOnce([&](const char* source, const char*, const char* filesystem,
+                      unsigned long flags, const void*) {
+            EXPECT_STREQ(fallbackDevicePath.c_str(), source);
+            EXPECT_STREQ("vfat", filesystem);
+            EXPECT_EQ(static_cast<unsigned long>(
+                          MS_NOSUID | MS_NODEV | MS_NOEXEC),
+                      flags);
+            return 0; // Make the first filesystem attempt succeed.
+        });
+
+    EXPECT_EQ(Core::ERROR_NONE,
+              handler.Invoke(connection, _T("getMountPoints"),
+                             _T("{\"deviceName\": \"001/002\"}"), response));
+}
