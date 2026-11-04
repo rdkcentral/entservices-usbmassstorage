@@ -74,7 +74,7 @@ jobs:
         entservices-authservice 
         entservices-deviceprovisioning
         entservices-contentprotection
-
+      
     steps:
       # ── Step 0: Skip if PR was closed WITHOUT merging ──────────
       - name: Check if PR was actually merged
