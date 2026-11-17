@@ -1,11 +1,5 @@
 name: Build USBMassStorage Component in Native Environment
 
-on:
-  push:
-    branches: [ main, 'sprint/**', 'release/**', develop, topic/RDKEMW-13481 ]
-  pull_request:
-    branches: [ main, 'sprint/**', 'release/**', topic/RDK*, develop ]
-
 jobs:
   build-usbmassstorage-on-pr:
     name: Build entservices-usbmassstorage component in github rdkcentral
@@ -34,6 +28,4 @@ jobs:
           ./build_tools_workflows/cov_docker_script/setup_dependencies.sh ./cov_docker_script/component_config.json
           chmod +x build_tools_workflows/cov_docker_script/build_native.sh
           ./build_tools_workflows/cov_docker_script/build_native.sh ./cov_docker_script/component_config.json "$(pwd)"
-        env:
-          GITHUB_TOKEN: ${{ secrets.RDKCM_RDKE }}
 
