@@ -11,7 +11,7 @@ on:
 env:
   BUILD_TYPE: Debug
   THUNDER_REF: "R4.4.6"
-  INTERFACES_REF: "develop"
+  INTERFACES_REF: "4.0.8"
   AUTOMATICS_UNAME: ${{ secrets.AUTOMATICS_UNAME}}
   AUTOMATICS_PASSCODE: ${{ secrets. AUTOMATICS_PASSCODE}}
 
@@ -111,7 +111,7 @@ jobs:
         with:
           repository: rdkcentral/entservices-testframework
           path: entservices-testframework
-          ref: develop
+          ref: 2.1.4
 
       - name: Checkout googletest
         if: steps.cache.outputs.cache-hit != 'true'
