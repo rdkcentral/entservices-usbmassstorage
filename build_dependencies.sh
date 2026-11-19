@@ -21,7 +21,7 @@ set -x
 set -e
 ##############################
 THUNDER_TOOLS_COMMIT_SHA="d5dd83c7c19c49c7f25c558c126500bd2d64f7a4"
-THUNDER_COMMIT_SHA="2c0fcc5529e7da734be558ca6efa05d934dcce31"
+THUNDER_COMMIT_SHA="a65c156de9062a8618004e9c7e06c3829032393f"
 GITHUB_WORKSPACE="${PWD}"
 ls -la ${GITHUB_WORKSPACE}
 cd ${GITHUB_WORKSPACE}
@@ -63,7 +63,7 @@ cd ..
 git clone --branch develop https://github.com/rdkcentral/entservices-helpers.git
 cd "$GITHUB_WORKSPACE"
 
-git clone --branch 2.0.0 https://github.com/rdkcentral/entservices-testframework.git
+git clone --branch 2.1.4 https://github.com/rdkcentral/entservices-testframework.git
 
 ############################
 # Build Thunder-Tools
